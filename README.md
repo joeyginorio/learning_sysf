@@ -6,6 +6,6 @@ That generates all terms of type Bool from the empty context, up to an AST size 
 
 The implementation of learning from examples is in the function lrnTerms in learning.hs.
 ```haskell
-lrnTerms TyBool [InTm TmTrue (Out TmTrue)] [] [] 5
+lrnTerms (TyAbs TyBool TyBool) [InTm TmTrue (Out TmTrue)] [] [] 3
 ```
-That generates all terms of type Bool from the empty context, up to an AST size 5 AND which satisfy the example <tt,tt>.
+That generates all terms of type Bool->Bool from the empty context, up to an AST size 3 AND which satisfy the example <tt,tt>.
