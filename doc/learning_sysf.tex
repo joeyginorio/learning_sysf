@@ -13,6 +13,40 @@
 %\documentclass[acmsmall]{acmart}\settopmatter{}
 
 
+% Load any additional packages %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{amsmath,amsthm,amsfonts,wasysym,bussproofs}
+\usepackage{booktabs,changepage}
+\usepackage{lipsum}
+\usepackage{setspace}
+
+\usepackage{titlesec,epigraph, listings}
+\usepackage{etoolbox}
+\usepackage{enumitem}
+
+% Commands %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\lam}{\lambda}
+
+\renewenvironment{proof}
+    {\textit{Proof.}}
+    {\qed\\}
+    
+\newtheoremstyle{mytheoremstyle} % name
+    {}                    % Space above
+    {}                    % Space below
+    {\itshape}                   % Body font
+    {}                 % Indent amount
+    {\bfseries}                  % Theorem head font
+    {.}                          % Punctuation after theorem head
+    {\newline}                      % Space after theorem head
+    {}                           % Theorem head spec (can be left empty, meaning ‘normal’)
+\theoremstyle{mytheoremstyle}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{lemma}[theorem]{Lemma}
+
+
+
+
 %% Journal information
 %% Supplied to authors by publisher for camera-ready submission;
 %% use defaults for review submission.
@@ -153,9 +187,8 @@ Route 2 is the approach we take in this work. We don't impose restrictions on th
 \item Prove the soundness and completeness of learning. (Section 2 \& 3)
 \item Provide an implementation of learning, extending strong theoretical guarantees in practice. (Section 4 \& 5)
 \end{itemize}
-
-
-
+dvsdfgsdgberregeer
+	
 
 % state issue with functions in return type
 % mention two possible solutions: don't allow them, focus on rest of 
@@ -171,11 +204,13 @@ Route 2 is the approach we take in this work. We don't impose restrictions on th
 % -- Prove soundness and completeness of learning
 % -- Implement learning, extending strong theoretical guarantees in practice.
 
-
+\section{System F}
 % present SysF syntax/typechecking/eval at end
+
 \section{Learning from Types}
 % present the augmented relation
 % state completeness/soundness result? or prove...
+
 \section{Learning from Examples}
 % present the augmented relation
 % state completeness/soundness result
