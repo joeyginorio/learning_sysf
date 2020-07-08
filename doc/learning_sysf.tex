@@ -95,7 +95,7 @@
 \begin{document}
 
 %% Title information
-\title[Short Title]{Learning in System F}
+\title{Learning in System F}
 
 
 %% Author information
@@ -185,14 +185,108 @@ Route 2 is the approach we take. We don't impose restrictions on the types or ex
 
 
 \section{System F}
-We assume you are familiar with System F, the polymorphic lambda calculus. You should know its syntax, typing, and evaluation. If you don't, we co-opt its specification in \cite{pierce2002types}. For a comprehensive introduction we defer the confused or rusty there.
+We assume you are familiar with System F, the polymorphic lambda calculus. You should know its syntax, typing, and evaluation. If you don't, we co-opt its specification in \cite{pierce2002types}. For a comprehensive introduction we defer the confused or rusty there. Additionally, we provide the specification in the appendix.
 
-Our focus in this section is to state the specification of System F: its syntax, typing, and evaluation. Along the way, we motivate why properties of each are advantageous for learning. Treat this section as an answer to the following question: 
+Our focus in this section is to motivate System F: its syntax, typing, and evaluation. And why properties of each are advantageous for learning. Treat this section as an answer to the following question: 
 \begin{displayquote}
 \textit{Why are we learning in System F?}
 \centering
 \end{displayquote}
 \subsection{Syntax}
+
+% minimal syntax
+% expressive enough to encode the useful things
+System F's syntax is simple. There aren't many syntactic forms. Whenever we state, prove, or implement things in System F we often use structural recursion on the syntax. A minimal syntax means we are succint when we state, prove, or implement those things.
+
+While simple, the syntax is still expressive. We can encode many staples of typed functional programming: algebraic data types, inductive types, and more \cite{pierce2002types}. For example, consider this encoding of products:
+\begin{align*}
+\tau_1 \times \tau_2 \,&::=\; \forall \alpha.(\tau_1 \to \tau_2 \to \alpha) \to \alpha\\
+\langle e_1,e_2 \rangle &::=\; \Lambda \alpha.\lambda f\!:\!(\tau_1 \to \tau_2 \to \alpha).fe_1e_2 
+\end{align*}
+
+\subsection{Typing}
+% Typed programs are safe : progress + preservation. Later, we leverage this to ensure the safety of programs we learn.
+System F is safe. Its typing ensures both progress and preservation, i.e. that well-typed programs do not get stuck and that they do not change type \cite{pierce2002types}. When we introduce learning, we lift this safety and extend it to programs we learn. Because we use this safety in later proofs, we state the progress and preservation theorems.
+\begin{theorem}[\textsc{Progress in Typing}]
+If $e$ is a closed, well-typed program, then either $e$ is a value or else there is some program $e'$ such that $e \to_\beta e'$.
+\label{progress-typing}
+\end{theorem}
+\begin{theorem}[\textsc{Preservation in Typing}]
+If $\,\Gamma \vdash e : \tau$ and $e \to_\beta e'$, then $\Gamma \vdash e' : \tau$.
+\label{preservation-typing}
+\end{theorem}
+
+
+
+
+\subsection{Evaluation}
+
+
+% strongly normalizing, show example of functions equivalent
+System F is strongly normalizing. All its programs terminate. As a result, we can use a simple procedure for deciding equality of programs (including functions). 
+\begin{enumerate}
+\item Run both programs until they terminate.
+\item Check if they share the same normal form, up to alpha-equivalence (renaming of variables).
+\item If they do, they are equal. Otherwise, unequal.
+\end{enumerate}
+For example, this decision procedure renders these programs equal:
+$$\lambda x\!:\!\tau.x \;\;=_\beta\;\; (\lambda y\!:\!(\tau\to\tau).y)\lambda z\!:\!\tau.z$$
+The decision procedure checks that two programs exist in the transitive reflexive closure of the evaluation relation. This only works because programs always terminate, a property we formally state below.
+
+\begin{theorem}[\textsc{Normalization in Evaluation}]
+Well-typed programs in System F always evaluate to a value, to a normal form.
+\label{normalization-evaluation}
+\end{theorem}
+% Strong normalization means we can decide function equality through the fdollowwing procedure: evaluate term, compare up to alpha equivalence.
+
+\section{Learning from Types}
+% present the augmented relation
+% state completeness/soundness result? or prove...
+
+\section{Learning from Examples}
+% present the augmented relation
+% state completeness/soundness result
+
+\section{Implementation}
+% how to make combinatorial search easier
+% - enumerating normal form programs
+% - deducing operationally distinct type applications
+% - memoizing recurisve calls?
+% - algebraic data types let us use examples productively
+%    - sum types split examples
+%	 - product types generate subproblems
+
+\section{Experiments}
+\section{Related Work}
+\section{Conclusion}
+
+
+%% Acknowledgments
+%%\begin{acks}                            %% acks environment is optional
+                                        %% contents suppressed with 'anonymous'
+  %% Commands \grantsponsor{<sponsorID>}{<name>}{<url>} and
+  %% \grantnum[<url>]{<sponsorID>}{<number>} should be used to
+  %% acknowledge financial support and will be used by metadata
+  %% extraction tools.
+%%  This material is based upon work supported by the
+%%  \grantsponsor{GS100000001}{National Science
+%%    Foundation}{http://dx.doi.org/10.13039/100000001} under Grant
+%%  No.~\grantnum{GS100000001}{nnnnnnn} and Grant
+%%  No.~\grantnum{GS100000001}{mmmmmmm}.  Any opinions, findings, and
+%%  conclusions or recommendations expressed in this material are those
+%%  of the author and do not necessarily reflect the views of the
+%%  National Science Foundation.
+%%\end{acks}
+
+
+%% Bibliography
+\bibliography{refs.bib}
+
+\newpage
+%% Appendix
+%%\appendix
+\section{Appendix}
+\subsection{Specification of System F}
 \begin{figure}[h]
 \centering
 \setlength{\tabcolsep}{12pt}
@@ -238,15 +332,6 @@ Our focus in this section is to state the specification of System F: its syntax,
     \label{fig:syntax}
 \end{figure}
 
-% minimal syntax
-% expressive enough to encode the useful things
-System F's syntax is simple. Just look at Figure \ref{fig:syntax}. There aren't many syntactic forms. Whenever we state, prove, or implement things in System F we often use structural recursion on the syntax. A minimal syntax means we are succint when we state, prove, or implement those things.
-
-While simple, the syntax is still expressive. We can encode many staples of typed functional programming: algebraic data types, inductive types, and more \cite{girard1989proofs}. For example, consider this encoding of the product type:
-
-erberberbrberb
-
-\subsection{Typing}
 \begin{figure}[h]
 \centering
 \setlength{\tabcolsep}{12pt}
@@ -313,59 +398,66 @@ erberberbrberb
     \label{fig:typing}
 \end{figure}
 
-% Typed programs are safe : progress + preservation. Later, we leverage this to ensure the safety of programs we learn.
-
-\subsection{Evaluation}
-
-% Strong normalization means we can decide function equality through the fdollowwing procedure: evaluate term, compare up to alpha equivalence.
-
-\section{Learning from Types}
-% present the augmented relation
-% state completeness/soundness result? or prove...
-
-\section{Learning from Examples}
-% present the augmented relation
-% state completeness/soundness result
-
-\section{Implementation}
-% how to make combinatorial search easier
-% - enumerating normal form programs
-% - deducing operationally distinct type applications
-% - memoizing recurisve calls?
-% - algebraic data types let us use examples productively
-%    - sum types split examples
-%	 - product types generate subproblems
-
-\section{Experiments}
-\section{Related Work}
-\section{Conclusion}
-
-
-%% Acknowledgments
-%%\begin{acks}                            %% acks environment is optional
-                                        %% contents suppressed with 'anonymous'
-  %% Commands \grantsponsor{<sponsorID>}{<name>}{<url>} and
-  %% \grantnum[<url>]{<sponsorID>}{<number>} should be used to
-  %% acknowledge financial support and will be used by metadata
-  %% extraction tools.
-%%  This material is based upon work supported by the
-%%  \grantsponsor{GS100000001}{National Science
-%%    Foundation}{http://dx.doi.org/10.13039/100000001} under Grant
-%%  No.~\grantnum{GS100000001}{nnnnnnn} and Grant
-%%  No.~\grantnum{GS100000001}{mmmmmmm}.  Any opinions, findings, and
-%%  conclusions or recommendations expressed in this material are those
-%%  of the author and do not necessarily reflect the views of the
-%%  National Science Foundation.
-%%\end{acks}
-
-
-%% Bibliography
-\bibliography{refs.bib}
-
-
-%% Appendix
-%%\appendix
-%%\section{Appendix}
+\begin{figure}[h]
+\centering
+\setlength{\tabcolsep}{12pt}
+\begin{tabular}{l r  l r}
+\specialrule{.1em}{0em}{.2em}
+\specialrule{.1em}{0em}{1em}
+    \Large \textsc{Evaluating} & 
+    &  & \fbox{ $e \to_\beta e'$}\\
+    & & \\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$e_1 \to_\beta e_1'$}
+            \RightLabel{\textsc{(E-App1)}}
+        \UnaryInfC{$e_1e_2 \to_\beta e_1'e_2$}
+        \DisplayProof
+    } &
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$e \to_\beta e'$}
+            \RightLabel{\textsc{(E-TApp)}}
+        \UnaryInfC{$e\lceil\tau\rceil \to_\beta e'\lceil\tau\rceil$}
+        \DisplayProof
+    }
+    \\
+    & &\\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$e_2 \to_\beta e_2'$}
+            \RightLabel{\textsc{(E-App2)}}
+        \UnaryInfC{$e_1e_2 \to_\beta e_1e_2'$}
+        \DisplayProof
+    } &
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$(\Lambda\alpha.\lam x{:}\alpha.e)\lceil\tau\rceil \to_\beta (\lam x{:}\alpha.e)[\tau/\alpha]\,\,$\textsc{(E-TSub)}}
+        \DisplayProof
+    }
+    \\
+    & &\\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$(\lam x{:}\tau.e)v \to_\beta e[v/x]\,\,$\textsc{(E-Sub)}}
+        \DisplayProof
+    } \\
+    & \\
+\specialrule{.1em}{1em}{0em}
+\end{tabular}
+\caption{Evaluating in System F}
+    \label{fig:evaluating}
+\end{figure}
 
 %%Text of appendix \ldots
 
