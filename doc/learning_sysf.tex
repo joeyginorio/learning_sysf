@@ -15,6 +15,7 @@
 
 % Load any additional packages %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \usepackage{amsmath,amsthm,amsfonts,wasysym,bussproofs}
+\usepackage{csquotes}
 \usepackage{booktabs,changepage}
 \usepackage{lipsum}
 \usepackage{setspace}
@@ -147,13 +148,7 @@ What might a programming language look like, if its programs could also be learn
 
 %% Keywords
 %% comma separated list
-\keywords{Program Synthesis, Type Theory, Inductive Programming}  %% \keywords are mandatory in final camera-ready submission
-
-
-%% \maketitle
-%% Note: \maketitle command must come after title commands, author
-%% commands, abstract environment, Computing Classification System
-%% environment and commands, and keywords command.
+\keywords{Program Synthesis, Type Theory, Inductive Programming} 
 \maketitle
 
 
@@ -181,31 +176,148 @@ The difficulty is with how to handle functions in the return type. The type $nat
 
 Route 1 is the approach of existing work. They don't allow functions in the return type, but keep an expressive Turing-complete language for learning. This can be a productive move, as many interesting programs don't return functions.
 
-Route 2 is the approach we take in this work. We don't impose restrictions on the types or examples we learn from. We instead sacrifice Turing-completeness. We choose a language where function equality is decidable, but still expressive enough to learn interesting programs. Our work shows that this too is a productive move, as many interesting programs return functions. Moreover, taking this route helps us make several contributions in this work:
+Route 2 is the approach we take. We don't impose restrictions on the types or examples we learn from. We instead sacrifice Turing-completeness. We choose a language where function equality is decidable, but still expressive enough to learn interesting programs. Our work shows that this too is a productive move, as many interesting programs return functions. This route leads us to several contributions:
 \begin{itemize}
 \item Detail how to learn arbitrary higher-order programs in System F. (Section 2 \& 3)
 \item Prove the soundness and completeness of learning. (Section 2 \& 3)
 \item Provide an implementation of learning, extending strong theoretical guarantees in practice. (Section 4 \& 5)
 \end{itemize}
-dvsdfgsdgberregeer
-	
 
-% state issue with functions in return type
-% mention two possible solutions: don't allow them, focus on rest of 
-% program space.... or our solution. keep them, use an expressive but
-% normalizing language as your languyage for learning.
-
-
-% Ok, that's surprising but who cares? Mention interesting higher-order.
-% Why can't we do it though? Essentially the undecidability of program equality for expressive-languages.
-% What's our solution in a nutshell. Lets' pick a strongly normalizing calculus which is still expressive enough for programs we care about.
-% State contributions explicitly, bulleted:
-% -- Learn arbitrary higher-order programs in System F.
-% -- Prove soundness and completeness of learning
-% -- Implement learning, extending strong theoretical guarantees in practice.
 
 \section{System F}
-% present SysF syntax/typechecking/eval at end
+We assume you are familiar with System F, the polymorphic lambda calculus. You should know its syntax, typing, and evaluation. If you don't, we co-opt its specification in \cite{pierce2002types}. For a comprehensive introduction we defer the confused or rusty there.
+
+Our focus in this section is to state the specification of System F: its syntax, typing, and evaluation. Along the way, we motivate why properties of each are advantageous for learning. Treat this section as an answer to the following question: 
+\begin{displayquote}
+\textit{Why are we learning in System F?}
+\centering
+\end{displayquote}
+\subsection{Syntax}
+\begin{figure}[h]
+\centering
+\setlength{\tabcolsep}{12pt}
+\begin{tabular}{l  r}
+\specialrule{.1em}{0em}{.2em}
+
+\specialrule{.1em}{0em}{1em}
+    \Large \textsc{Syntax} & \\
+    & \\
+    \begin{math}
+    \setlength{\jot}{-2pt}
+    \begin{aligned}
+    e ::= \;& && \hspace*{.25in} \textsc{terms:}\\
+        & x && \hspace*{.25in} \textit{variable}\\
+        & e_1e_2 && \hspace*{.25in} \textit{application}\\
+        & \lam x {:} \tau.e && \hspace*{.25in} \textit{abstraction}\\
+        & e\lceil\tau\rceil && \hspace*{.25in} \textit{type application}\\    
+        & \Lambda\alpha.e && \hspace*{.25in} \textit{type abstraction}\\
+    \\
+    v ::= \;& && \hspace*{.25in} \textsc{values:} \\
+        & \lam x {:}\tau.e && \hspace*{.25in} \textit{abstraction}\\
+        & \Lambda\alpha.e && \hspace*{.25in} \textit{type abstraction}\\
+    \end{aligned}
+    \end{math} & 
+    \begin{math}
+    \setlength{\jot}{-2pt}
+    \begin{aligned}
+    \tau ::= \;& && \hspace*{.25in} \textsc{types:}\\
+        & \tau_1 \to \tau_2 && \hspace*{.25in} \textit{function type}\\
+        & \forall\alpha.\tau && \hspace*{.25in} \textit{polymorphic type}\\
+        & \alpha && \hspace*{.25in} \textit{type variable}\\
+    \\
+    \Gamma ::= \;& && \hspace*{.25in} \textsc{contexts:}\\
+        & \cdot && \hspace*{.25in} \textit{empty}\\
+        & x{:}\tau,\Gamma && \hspace*{.25in} \textit{variable}\\
+        & \alpha,\Gamma && \hspace*{.25in} \textit{type variable}
+    \end{aligned}
+    \end{math}\\
+    &\\
+\specialrule{.1em}{1em}{0em}
+\end{tabular}
+\caption{Syntax in System F}
+    \label{fig:syntax}
+\end{figure}
+
+% minimal syntax
+% expressive enough to encode the useful things
+System F's syntax is simple. Just look at Figure \ref{fig:syntax}. There aren't many syntactic forms. Whenever we state, prove, or implement things in System F we often use structural recursion on the syntax. A minimal syntax means we are succint when we state, prove, or implement those things.
+
+While simple, the syntax is still expressive. We can encode many staples of typed functional programming: algebraic data types, inductive types, and more \cite{girard1989proofs}. For example, consider this encoding of the product type:
+
+erberberbrberb
+
+\subsection{Typing}
+\begin{figure}[h]
+\centering
+\setlength{\tabcolsep}{12pt}
+\begin{tabular}{l r  l r}
+\specialrule{.1em}{0em}{.2em}
+\specialrule{.1em}{0em}{1em}
+    \Large \textsc{Typing} & 
+    &  & \framebox{$\Gamma \vdash e : \tau$}\\
+    & & \\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$x:\tau \in \Gamma$}
+            \RightLabel{\textsc{(T-Var)}}
+        \UnaryInfC{$\Gamma \vdash x : \tau$}
+        \DisplayProof
+    } &
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$\Gamma,\alpha \vdash e : \tau$}
+            \RightLabel{\textsc{(T-TAbs)}}
+        \UnaryInfC{$\Gamma \vdash \Lambda \alpha.e:\forall\alpha.\tau$}
+        \DisplayProof
+    }
+    \\
+    & &\\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$\Gamma,x{:}\tau_1 \vdash e_2 : \tau_2$}
+            \RightLabel{\textsc{(T-Abs)}}
+        \UnaryInfC{$\Gamma \vdash \lam x{:}\tau_1.e_2:\tau_1 \to \tau_2$}
+        \DisplayProof
+    } &
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$\Gamma \vdash e : \forall\alpha.\tau_1$}
+            \RightLabel{\textsc{(T-TApp)}}
+        \UnaryInfC{$\Gamma \vdash e\lceil\tau_2\rceil : [\tau_2/\alpha]\tau_1$}
+        \DisplayProof
+    }
+    \\
+    & &\\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$\Gamma \vdash e_1 : \tau_1 \to \tau_2$}
+        \AxiomC{$\Gamma \vdash e_2 : \tau_1$}
+            \RightLabel{\textsc{(T-App)}}
+        \BinaryInfC{$\Gamma \vdash e_1e_2 : \tau_2$}
+        \DisplayProof
+    } \\
+    & \\
+\specialrule{.1em}{1em}{0em}
+\end{tabular}
+\caption{Typing in System F}
+    \label{fig:typing}
+\end{figure}
+
+% Typed programs are safe : progress + preservation. Later, we leverage this to ensure the safety of programs we learn.
+
+\subsection{Evaluation}
+
+% Strong normalization means we can decide function equality through the fdollowwing procedure: evaluate term, compare up to alpha equivalence.
 
 \section{Learning from Types}
 % present the augmented relation
