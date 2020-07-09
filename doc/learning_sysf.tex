@@ -342,6 +342,8 @@ The implementation ``works'' minus a programs which require multiple type applic
 
 \section{Related Work}
 
+The literature on synthesis is both vast and rapidly expanding. Therefore, we inevitably cherry-pick among approaches that have inspired us while covering a varied landscape as well.
+
 \subsection{Type-driven synthesis}
 
 The seminal works on type-driven synthesis by \citet{osera2015program}. demonstrates that you can have none-``magical'' approaches to synthesis: everything is predictable, such as for instance, needing trace-complete examples. We take inspiration from this work, and suggest a way forward for examples with higher-order functions in the input/output exammples. We do not require trace completeness for System F is strongly normalizing.
@@ -350,11 +352,9 @@ The seminal works on type-driven synthesis by \citet{osera2015program}. demonstr
 
 \subsection{Other approaches to synthesis}
 
-While the literature on synthesis is vast, we focus on three interesting alternatives to type-driven synthesis.
-
 Program Sketching~\cite{solar2008program} has been a promising approach to synthesis. It relies on specification and holes. We rely on types instead of full-blown specifications.
 
-Microsoft Prose (cite) has enabled the program demonstration of
+Microsoft Prose~\cite{msprose} has enabled the program demonstration of
 Excel. The Microsoft team has packaged the lessons learned from
 FlashFill (cite) into a generic framework Flash Meta (cite). The key
 insight is that witness functions (also known as reverse semantics)
