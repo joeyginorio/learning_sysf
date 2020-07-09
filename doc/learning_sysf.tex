@@ -185,7 +185,7 @@ Route 2 is the approach we take. We don't impose restrictions on the types or ex
 
 
 \section{System F}
-We assume you are familiar with System F, the polymorphic lambda calculus. You should know its syntax, typing, and evaluation. If you don't, we co-opt its specification in \cite{pierce2002types}. For a comprehensive introduction we defer the confused or rusty there. Additionally, we provide the specification in the appendix.
+We assume you are familiar with System F, the polymorphic lambda calculus. You should know its syntax, typing, and evaluation. If you don't, we co-opt its specification in \cite{pierce2002types}. For a comprehensive introduction we defer the confused or rusty there. Additionally, we provide the specification and relevant theorems in the appendix.
 
 Our focus in this section is to motivate System F: its syntax, typing, and evaluation. And why properties of each are advantageous for learning. Treat this section as an answer to the following question: 
 \begin{displayquote}
@@ -206,22 +206,9 @@ While simple, the syntax is still expressive. We can encode many staples of type
 
 \subsection{Typing}
 % Typed programs are safe : progress + preservation. Later, we leverage this to ensure the safety of programs we learn.
-System F is safe. Its typing ensures both progress and preservation, i.e. that well-typed programs do not get stuck and that they do not change type \cite{pierce2002types}. When we introduce learning, we lift this safety and extend it to programs we learn. Because we use this safety in later proofs, we state the progress and preservation theorems.
-\begin{theorem}[\textsc{Progress in Typing}]
-If $e$ is a closed, well-typed program, then either $e$ is a value or else there is some program $e'$ such that $e \to_\beta e'$.
-\label{progress-typing}
-\end{theorem}
-\begin{theorem}[\textsc{Preservation in Typing}]
-If $\,\Gamma \vdash e : \tau$ and $e \to_\beta e'$, then $\Gamma \vdash e' : \tau$.
-\label{preservation-typing}
-\end{theorem}
-
-
-
+System F is safe. Its typing ensures both progress and preservation, i.e. that well-typed programs do not get stuck and that they do not change type \cite{pierce2002types}. When we introduce learning, we lift this safety and extend it to programs we learn. Because we use this safety in later proofs, we state the progress and preservation theorems in the appendix.
 
 \subsection{Evaluation}
-
-
 % strongly normalizing, show example of functions equivalent
 System F is strongly normalizing. All its programs terminate. As a result, we can use a simple procedure for deciding equality of programs (including functions). 
 \begin{enumerate}
@@ -231,12 +218,7 @@ System F is strongly normalizing. All its programs terminate. As a result, we ca
 \end{enumerate}
 For example, this decision procedure renders these programs equal:
 $$\lambda x\!:\!\tau.x \;\;=_\beta\;\; (\lambda y\!:\!(\tau\to\tau).y)\lambda z\!:\!\tau.z$$
-The decision procedure checks that two programs exist in the transitive reflexive closure of the evaluation relation. This only works because programs always terminate, a property we formally state below.
-
-\begin{theorem}[\textsc{Normalization in Evaluation}]
-Well-typed programs in System F always evaluate to a value, to a normal form.
-\label{normalization-evaluation}
-\end{theorem}
+The decision procedure checks that two programs exist in the transitive reflexive closure of the evaluation relation. This only works because programs always terminate, a property we formally state in the appendix.
 % Strong normalization means we can decide function equality through the fdollowwing procedure: evaluate term, compare up to alpha equivalence.
 
 \section{Learning from Types}
@@ -398,6 +380,15 @@ Well-typed programs in System F always evaluate to a value, to a normal form.
     \label{fig:typing}
 \end{figure}
 
+\begin{theorem}[\textsc{Progress in Typing}]
+If $e$ is a closed, well-typed program, then either $e$ is a value or else there is some program $e'$ such that $e \to_\beta e'$.
+\label{progress-typing}
+\end{theorem}
+\begin{theorem}[\textsc{Preservation in Typing}]
+If $\,\Gamma \vdash e : \tau$ and $e \to_\beta e'$, then $\Gamma \vdash e' : \tau$.
+\label{preservation-typing}
+\end{theorem} 
+
 \begin{figure}[h]
 \centering
 \setlength{\tabcolsep}{12pt}
@@ -459,6 +450,10 @@ Well-typed programs in System F always evaluate to a value, to a normal form.
     \label{fig:evaluating}
 \end{figure}
 
+\begin{theorem}[\textsc{Normalization in Evaluation}]
+Well-typed programs in System F always evaluate to a value, to a normal form.
+\label{normalization-evaluation}
+\end{theorem}
 %%Text of appendix \ldots
 
 \end{document}
