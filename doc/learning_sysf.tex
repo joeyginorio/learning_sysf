@@ -97,7 +97,6 @@
 %% Title information
 \title{Learning in System F}
 
-
 %% Author information
 %% Contents and number of authors suppressed with 'anonymous'.
 %% Each author should be introduced by \author, followed by
@@ -224,6 +223,78 @@ The decision procedure checks that two programs exist in the transitive reflexiv
 \section{Learning from Types}
 % present the augmented relation
 % state completeness/soundness result? or prove...
+
+% dont need a figure, but state the normal form syntax like osera does
+% then introduce the learning from types.
+
+
+
+
+\begin{figure}[ht]
+\centering
+\setlength{\tabcolsep}{12pt}
+\begin{tabular}{l r  l r}
+\specialrule{.1em}{0em}{.2em}
+\specialrule{.1em}{0em}{1em}
+    \Large \textsc{Learning} & 
+    &  & \framebox{$\Gamma \vdash \tau \rightsquigarrow e$}\\
+    & & \\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$x:\tau \in \Gamma$}
+            \RightLabel{\textsc{(L-Var)}}
+        \UnaryInfC{$\Gamma \vdash \tau \rightsquigarrow x$}
+        \DisplayProof
+    } &
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$\Gamma,\alpha \vdash \tau \rightsquigarrow e$}
+            \RightLabel{\textsc{(G-TAbs)}}
+        \UnaryInfC{$\Gamma \vdash \forall\alpha.\tau \rightsquigarrow \lam \alpha.e$}
+        \DisplayProof
+    }
+    \\
+    & &\\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$\Gamma,x{:}\tau_1 \vdash \tau_2 \rightsquigarrow e_2$}
+            \RightLabel{\textsc{(L-Abs)}}
+        \UnaryInfC{$\Gamma \vdash \tau_1 \to \tau_2 \rightsquigarrow \lam x{:}\tau_1.e_2$}
+        \DisplayProof
+    } &
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$\Gamma \vdash \forall\alpha.\tau_1 \rightsquigarrow e$}
+            \RightLabel{\textsc{(L-TApp)}}
+        \UnaryInfC{$\Gamma \vdash [\tau_2/\alpha]\tau_1 \rightsquigarrow e\lceil\tau_2\rceil$}
+        \DisplayProof
+    }
+    \\
+    & &\\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$\Gamma \vdash \tau_1 \to \tau_2 \rightsquigarrow e_1$}
+        \AxiomC{$\Gamma \vdash \tau_1 \rightsquigarrow e_2$}
+            \RightLabel{\textsc{(L-App)}}
+        \BinaryInfC{$\Gamma \vdash \tau_2 \rightsquigarrow e_1e_2$}
+        \DisplayProof
+    } \\
+    & \\
+\specialrule{.1em}{1em}{0em}
+\end{tabular}
+\caption{Learning from types in System F}
+    \label{fig:learning}
+\end{figure}
 
 \section{Learning from Examples}
 % present the augmented relation
