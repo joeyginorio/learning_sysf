@@ -354,7 +354,14 @@ While the literature on synthesis is vast, we focus on three interesting alterna
 
 Program Sketching has been the most promising approach to synthesis. It relies on specification and holes. We rely on types instead of full-blown specifications.
 
-Microsoft Prose (cite) has enabled the program demonstration of Excel. The Microsoft team has packaged the lessons learned from FlashFill (cite) into a generic framework Flash Meta (cite).
+Microsoft Prose (cite) has enabled the program demonstration of
+Excel. The Microsoft team has packaged the lessons learned from
+FlashFill (cite) into a generic framework Flash Meta (cite). The key
+insight is that witness functions (also known as reverse semantics)
+are enough to speed up synthesis a for a domain-specific language. In
+Prose, the synthesizer author defines a grammar for the language, the
+semantics and the inverse semantics, and the framework automagically
+creates the synthesizer.
 
 Another term for synthesis used in the learning community is program induction.
 Differentiable programming...
