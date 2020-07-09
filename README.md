@@ -15,3 +15,5 @@ To generate polymorphic terms, our examples include types. These types are used 
 lrnTerms (TyTAbs "X" (TyAbs (TyVar "X") (TyVar "X"))) [InTy TyBool (InTm TmTrue (Out TmTrue))] [] [] 4
 ```
 This will produce the polymorphic identity function. 
+
+The implementation 'works' minus a programs which require multiple type applications. There's also a bottleneck in performance that becomes apparent when synthesizing programs at around AST depth 20, because of the way the type application rule is currently implemented for learning.
