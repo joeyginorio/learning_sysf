@@ -230,6 +230,10 @@ The decision procedure checks that two programs exist in the transitive reflexiv
 % state completeness/soundness result
 
 \section{Implementation}
+
+We have implemented a proof-of-concept prototype, with promising results.
+(Reviewers: see the artifact attached.)
+
 % how to make combinatorial search easier
 % - enumerating normal form programs
 % - deducing operationally distinct type applications
@@ -239,6 +243,29 @@ The decision procedure checks that two programs exist in the transitive reflexiv
 %	 - product types generate subproblems
 
 \section{Experiments}
+
+The implementation of learning from types is in the function {\tt genTerms} in {\tt learning.hs}. All the code in this section is in Haskell and runs in {\tt ghci}:
+\begin{verbatim}
+genTerms TyBool [] 5
+\end{verbatim}
+
+That generates all terms of type {\tt Bool} from the empty context, up to an AST size 5.
+
+The implementation of learning from examples is in the function {\tt lrnTerms} in {\tt learning.hs}.
+\begin{verbatim}
+lrnTerms (TyAbs TyBool TyBool) [InTm TmTrue (Out TmTrue)] [] [] 3
+\end{verbatim}
+
+That generates all terms of type {\tt Bool->Bool} from the empty context, up to an AST size 3 \emph{and} which satisfy the example $<tt,tt>$. 
+
+To generate polymorphic terms, our examples include types. These types are used to instantiate an example at a particular base type. For example, run the following in ghci to learn at type $(\forall X.X->X)$ with examples $<Bool,tt,tt>$:
+\begin{verbatim}
+lrnTerms (TyTAbs "X" (TyAbs (TyVar "X") (TyVar "X"))) [InTy TyBool (InTm TmTrue (Out TmTrue))] [] [] 4
+\end{verbatim}
+This will produce the polymorphic identity function. 
+
+The implementation ``works'' minus a programs which require multiple type applications. There's also a bottleneck in performance that becomes apparent when synthesizing programs at around AST depth 20, because of the way the type application rule is currently implemented for learning.
+
 \section{Related Work}
 
 \subsection{Type-driven synthesis}
