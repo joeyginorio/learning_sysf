@@ -14,4 +14,8 @@ To generate polymorphic terms, our examples include types. These types are used 
 ```haskell
 lrnTerms (TyTAbs "X" (TyAbs (TyVar "X") (TyVar "X"))) [InTy TyBool (InTm TmTrue (Out TmTrue))] [] [] 4
 ```
-This will produce the polymorphic identity function. 
+This will produce the polymorphic identity function.
+
+The implementation 'works' minus programs which require multiple type applications, or programs where a type application is interleaved with multiple term applications. For example, the encoding of the projections for products require a type application interleaved with multiple term applications.
+
+There's also a bottleneck in performance that becomes apparent when synthesizing programs at around AST depth 20, because of the way the type application rule is currently implemented for learning. This is fixable.

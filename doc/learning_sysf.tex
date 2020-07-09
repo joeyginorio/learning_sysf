@@ -301,6 +301,10 @@ The decision procedure checks that two programs exist in the transitive reflexiv
 % state completeness/soundness result
 
 \section{Implementation}
+
+We have implemented a proof-of-concept prototype, with promising results.
+(Reviewers: see the artifact attached.)
+
 % how to make combinatorial search easier
 % - enumerating normal form programs
 % - deducing operationally distinct type applications
@@ -310,7 +314,52 @@ The decision procedure checks that two programs exist in the transitive reflexiv
 %	 - product types generate subproblems
 
 \section{Experiments}
+
+The implementation of learning from types is in the function {\tt genTerms} in {\tt learning.hs}. All the code in this section is in Haskell and runs in {\tt ghci}:
+\begin{verbatim}
+genTerms TyBool [] 5
+\end{verbatim}
+
+That generates all terms of type {\tt Bool} from the empty context, up to an AST size 5.
+
+The implementation of learning from examples is in the function {\tt lrnTerms} in {\tt learning.hs}.
+\begin{verbatim}
+lrnTerms (TyAbs TyBool TyBool) [InTm TmTrue (Out TmTrue)] [] [] 3
+\end{verbatim}
+
+That generates all terms of type {\tt Bool->Bool} from the empty context, up to an AST size 3 \emph{and} which satisfy the example $<tt,tt>$. 
+
+To generate polymorphic terms, our examples include types. These types are used to instantiate an example at a particular base type. For example, run the following in ghci to learn at type $(\forall X.X->X)$ with examples $<Bool,tt,tt>$:
+\begin{verbatim}
+lrnTerms (TyTAbs "X" (TyAbs (TyVar "X") (TyVar "X")))
+         [InTy TyBool (InTm TmTrue (Out TmTrue))]
+         [] [] 4
+\end{verbatim}
+This will produce the polymorphic identity function.
+% TODO show the production
+
+The implementation ``works'' minus a programs which require multiple type applications. There's also a bottleneck in performance that becomes apparent when synthesizing programs at around AST depth 20, because of the way the type application rule is currently implemented for learning.
+
 \section{Related Work}
+
+\subsection{Type-driven synthesis}
+
+The seminal works (cite) of Osera et al. demonstrates that you can have none-``magical'' approaches to synthesis: everything is predictable, such as for instance, needing trace-complete examples (cite). We take inspiration from this work, and suggest a way forward for examples with higher-order functions in the input/output exammples.
+
+Polikarpova et al. (cite) have extended the typed-driven approaach to refinement types. This is interesting because refinement types, such as Liquid Types (cite), are rather expressive and the types can act as rich specification. Our work extends the type-driven approach in an orthogonal direction.
+
+\subsection{Other approaches to synthesis}
+
+While the literature on synthesis is vast, we focus on three interesting alternatives to type-driven synthesis.
+
+Program Sketching has been the most promising approach to synthesis. It relies on specification and holes.
+
+Microsoft Prose (cite) has enabled the program demonstration of Excel. The Microsoft team has packaged the lessons learned from FlashFill (cite) into a generic framework Flash Meta (cite).
+
+Another term for synthesis is program induction.
+Metagol...
+Neural-Guided Search uses neural networks \emph{not} for creating programs but for guiding the search on the symbolic possibilities.
+
 \section{Conclusion}
 
 
