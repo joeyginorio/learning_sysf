@@ -346,7 +346,7 @@ The implementation ``works'' minus a programs which require multiple type applic
 
 The seminal works on type-driven synthesis by \citet{osera2015program}. demonstrates that you can have none-``magical'' approaches to synthesis: everything is predictable, such as for instance, needing trace-complete examples. We take inspiration from this work, and suggest a way forward for examples with higher-order functions in the input/output exammples. We do not require trace completeness for System F is strongly normalizing.
 
-\citet{polikarpova2016program} have extended the typed-driven approaach to refinement types. This is interesting because refinement types, such as Liquid Types~\cite{lrondon2012liquid} are rather expressive and the types can act as rich specification. Our work extends the type-driven approach in an orthogonal direction.
+\citet{polikarpova2016program} have extended the typed-driven approaach to refinement types. This is interesting because refinement types, such as Liquid Types~\cite{lrondon2012liquid} are rather expressive and the types can act as rich specification. The idea of liquid types has been researched in many languages beyond the initial ML-style setting: for example, Javascript (cite) and Haskell (cite). Our work extends the type-driven approach in an orthogonal direction.
 
 \subsection{Other approaches to synthesis}
 
@@ -363,7 +363,7 @@ Prose, the synthesizer author defines a grammar for the language, the
 semantics and the inverse semantics, and the framework automagically
 creates the synthesizer.
 
-Rosette (cite) is a solver-aided language framework that similarly enables a separation of concern between domain and generic solving, based on satisfiability modulo theory underneath the hood. In Rosette, one can write a vanilla interpreter and get a synthesizer.
+Rosette~\cite{rosette} is a solver-aided language framework that similarly enables a separation of concern between domain and generic solving, based on satisfiability modulo theory underneath the hood. In Rosette, one can write a vanilla interpreter and get a synthesizer.
 
 Another term for synthesis used in the learning community is program induction.
 Differentiable programming...
