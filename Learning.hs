@@ -1,8 +1,7 @@
 {-|
 Learning.hs
 ==============================================================================
-Defines synthesis rules from types and examples. Follows the specification in
-Chapter 3 and 4 of "Learning in System F".
+Defines synthesis rules from types and examples. Follows the specification.
 -}
 
 module Learning where
