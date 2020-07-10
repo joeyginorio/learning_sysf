@@ -140,7 +140,7 @@
 \begin{abstract}
 Program synthesis, type inhabitance, inductive programming, and theorem proving. Different names for the same problem: learning programs from data. Sometimes the programs are proofs, sometimes they’re terms. Sometimes data are examples, and sometimes they’re types. Yet the aim is the same. We want to construct a program which satisfies some data. We want to learn a program.
 
-What might a programming language look like, if its programs could also be learned? We give it data, and it learns a program from it. This work shows that System F yields a simple approach for learning from types and examples. Beyond simplicity, System F gives us a guarantee on the soundness and completeness of learning. We learn correct programs, and can learn all observationally distinct programs in System F. Unlike previous works, we don't restrict what examples can be. As a result, we show how to learn arbitrary higher-order programs in System F from types and examples. 
+What might a programming language look like, if its programs could also be learned? We give it data, and it learns a program from it. This work shows that System F yields a simple approach for learning from types and examples. Beyond simplicity, System F gives us a guarantee on the soundness and completeness of learning. We learn correct programs, and can learn all observationally distinct programs in System F. Unlike previous works, we don't restrict what examples can be. As a result, we show how to learn eventually arbitrary higher-order programs in System F from types and examples. 
 
 \end{abstract}
 
@@ -296,7 +296,573 @@ The decision procedure checks that two programs exist in the transitive reflexiv
     \label{fig:learning}
 \end{figure}
 
-\section{Learning from Examples}
+\section{Learning from Examples, Declaratively}
+
+\subsection{What are examples?}
+
+Examples $[\chi_1,\dots,\chi_n]$ are lists of tuples, containing the inputs and output to a program. For instance $[\langle1,1\rangle]$ describes an example whose input is $1$ and output is $1$. If I want to specify more than one example, I can package examples $\chi$ into the list: $[\langle 1,1\rangle, \langle2,2\rangle]$. Here I have two examples, each with one input and one output. In general, examples take the form \vspace{-1.0em}
+\begin{singlespace}
+$$\chi ::= \langle e, \chi\rangle \mid \langle e,Nil\rangle$$
+\end{singlespace}
+where $e$ is an arbitrary program in System F and $\chi$ is an example. This syntax for examples lets us construct examples with arbitrary numbers of inputs, e.g. $\langle10,10,20\rangle \equiv \langle 10, \langle 10, \langle 20,Nil\rangle\rangle\rangle.$ Note that when examples have multiple inputs I use the short-hand notation for describing an $n-$tuple, $\langle10,10,20\rangle$ in lieu of full notation $ \langle 10, \langle 10, \langle 20,Nil\rangle\rangle\rangle$. Likewise when an example is merely $\langle e,Nil\rangle$, I use the short-hand $\langle e\rangle$---as $Nil$ can be interpreted as the empty element.
+
+For an example $\chi \equiv \langle e_1,\dots,e_n\rangle$, an ordered list of inputs is given by $e_1,\dots,e_{n-1}$. The last index always denotes an output. An example satisfies or describes a program, if when the ordered list of inputs $e_1,\dots,e_{n-1}$ is applied to a program $e$, it is equivalent to the output $e_n$. That is,\vspace{-1.0em}
+\begin{singlespace}
+$$(((e\,e_1)e_2)\dots e_{n-1}) =_\beta e_n$$
+\end{singlespace}
+For instance, $\chi \equiv \langle 1,1\rangle$ satisfies the identity program $\lam x{:}nat.x$ because \vspace{-1.0em}
+\begin{singlespace}
+$$(\lam x{:}nat.x)1 =_\beta 1$$
+\end{singlespace}
+Similarly, a list of examples $[\chi_1,\dots,\chi_n]$ satisfies some program if each example in the list satisfies the program. Note that with this notion of satisfaction, we can construct examples which satisfy any program $e$, that is $\langle e\rangle$. It's an example with no input, and whose output is $e$. Because no inputs can be applied, and that $e =_\beta e$, $\langle e\rangle$ satisfies $e$.
+
+With the learning relation, we can ask whether \textsc{identity} is learnable given a context, type, and examples. \textsc{identity} is a program which takes a natural number and returns it. \vspace{-1.0em}
+\begin{singlespace}
+$$\cdot \vdash nat \!\to\! nat \rhd \langle\langle1,1\rangle,\langle2,2\rangle\rangle \rightsquigarrow \blacksquare$$
+\end{singlespace}
+Examples are stored as tuples. They describe possible worlds, one where our program's input is 1 and the other where our program's input is 2. Throughout learning we need a way to keep track of these distinct worlds. So our first step is always to duplicate $\blacksquare$, so that there is one per example. \vspace{-1.0em}
+\begin{singlespace}
+$$\cdot \vdash list \,nat \!\to\! nat \rhd \langle\langle1,1\rangle,\langle2,2\rangle\rangle \rightsquigarrow [\blacksquare, \blacksquare]$$
+\end{singlespace}
+Let's refine these worlds, by applying them to their respective inputs. We extract the inputs from each example tuple.\vspace{-1.0em}
+\begin{singlespace}
+$$1{:}nat, 2{:}nat \vdash list \,nat \rhd \langle\langle1\rangle,\langle2\rangle\rangle \rightsquigarrow [(\blacksquare)1, (\blacksquare)2]$$
+\end{singlespace}
+Because $\blacksquare$ is applied to an argument, we know it must be an abstraction. Hence, we can also claim: \vspace{-1.0em}
+\begin{singlespace}
+$$1{:}nat, 2{:}nat \vdash list \,nat \rhd \langle\langle1\rangle,\langle2\rangle\rangle \rightsquigarrow [(\lam x{:}nat.\blacksquare)1, (\lam x{:}nat.\blacksquare)2]$$
+\end{singlespace}
+Now that we've ran out of inputs in our examples, the problem becomes how to generate a program which satisfy the outputs left in the example tuples:\vspace{-1.0em}
+\begin{singlespace}
+$$1{:}nat, 2{:}nat \vdash list \,nat\, \rightsquigarrow [(\lam x{:}nat.\blacksquare)1, (\lam x{:}nat.\blacksquare)2]$$
+$$(\lam x{:}nat.\blacksquare)1 =_\beta 1\;\land\;(\lam x{:}nat.\blacksquare)2=_\beta2$$
+\end{singlespace}
+Given the constraints on well-typed terms, it's easy to find $x$ to fill the body of the abstraction. This will become clear in the formal proof to follow. \vspace{-1.0em}
+\begin{singlespace}
+$$1{:}nat, 2{:}nat \vdash list \,nat\, \rightsquigarrow [(\lam x{:}nat.x)1, (\lam x{:}nat.x)2]$$
+$$(\lam x{:}nat.x)1 =_\beta 1\;\land\;(\lam x{:}nat.x)2=_\beta2$$
+\end{singlespace}
+Having satisfied the outputs from our examples, we've informally shown $\textsc{identity} \equiv \lam x{:}nat.x$ is learnable in System F. And all the machinery comes from types and operators we can encode in System F: list and product types along with their constructors and deconstructors.
+
+\begin{figure}[h!]
+\centering
+\setlength{\tabcolsep}{12pt}
+\begin{tabular}{l r}
+\specialrule{.1em}{0em}{.2em}
+\specialrule{.1em}{0em}{1em}
+    \Large \textsc{Learning} & 
+    \framebox{$\Gamma \vdash \tau \rhd \chi \rightsquigarrow e$}\\
+    & \\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSp]acing{4pt}
+    \def\defaultHypSeparation{\hskip .4in}
+        \AxiomC{$\Gamma \vdash list \,\tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow [e_1,\dots,e_n]$}
+        \AxiomC{$\bigwedge_{i=1}^n e_i =_\beta e_n$}
+        \RightLabel{\textsc{(L-Wrld)}}
+        \BinaryInfC{$\Gamma \vdash \tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow e$}
+        
+
+        \DisplayProof
+    } \\\\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .4in}
+        \AxiomC{$\Gamma, \bigcup_{i=1}^n \chi_i{:}\tau \vdash list \,\tau \rightsquigarrow [e_1,\dots,e_n]$}
+        \AxiomC{$\bigwedge_{i=1}^{n} e_i =_\beta \chi_i$}
+            \RightLabel{\textsc{(L-Base)}}
+        \BinaryInfC{$\Gamma \vdash list \,\tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow [e_1,\dots,e_n]$}
+        
+
+        \DisplayProof
+    } \\\\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .4in}
+        \AxiomC{$\Gamma, \bigcup_{i=1}^n\pi_1(\chi_i){:}\tau_a \vdash list \,\tau_b \rhd [\pi_2(\chi_1),\dots,\pi_2(\chi_n)] \rightsquigarrow [e_1\pi_1(\chi_1),\dots,e_n\pi_1(\chi_n)]$}
+        \RightLabel{\textsc{(L-EAbs)}}
+        \UnaryInfC{$\Gamma \vdash list \,\tau_{a} \!\to\! \tau_b \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow [e_1,\dots,e_n]$}
+        \DisplayProof
+    } \\\\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .4in}
+        \AxiomC{$\Gamma, \alpha \vdash list \,\tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow [e_1\lceil\alpha\rceil,\dots,e_n\lceil\alpha\rceil]$}
+        \RightLabel{\textsc{(L-ETAbs)}}
+        \UnaryInfC{$\Gamma \vdash list \,\forall\alpha.\tau \rhd [\Lambda\alpha.\chi_1,\dots,\Lambda\alpha.\chi_n] \rightsquigarrow [e_1,\dots,e_n]$}
+        \DisplayProof
+    } \\\\
+    \multicolumn{2}{c}{
+    \def\extraVskip{1pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .4in}
+    \alwaysNoLine
+        \AxiomC{$\Gamma\vdash list \,\tau_{a} \!\to\! \tau_c \rhd [\chi_1,\dots,\chi_j] \rightsquigarrow [e_1,\dots,e_j]$}
+        \UnaryInfC{$\Gamma\vdash list \,\tau_{b} \!\to\! \tau_c \rhd [\chi_1,\dots,\chi_k] \rightsquigarrow [e_1,\dots,e_k]$}
+        \RightLabel{\textsc{(L-Sum)}}
+        \alwaysSingleLine
+        \def\extraVskip{4pt}
+        \UnaryInfC{$\Gamma \vdash list \,(\tau_a\!+\!\tau_b) \!\to\! \tau_c \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow [e_1,\dots,e_n]$}
+        \DisplayProof
+    } \\
+    & \\
+\specialrule{.1em}{1em}{0em}
+\end{tabular}
+\caption{Learning from examples in System F}
+    \label{fig:learning-examples}
+\end{figure}
+
+The informal process of learning described can be made formal via the relation presented in Figure \ref{fig:learning-examples}.
+
+\textsc{(L-Wrld)} says that if you can learn a list of programs $[e_1,\dots,e_n]$, where $e_1,\dots,e_n$ are equivalent, then you can learn the program $e_1$. This rule is used to create $n$ worlds for $n$ examples at the start of learning.
+\begin{prooftree}
+\def\extraVskip{4pt}
+\def\labelSpacing{4pt}
+	\AxiomC{$\Gamma \vdash list\,nat\!\to\!nat \rhd [\langle1,1\rangle,\langle2,2\rangle] \rightsquigarrow [\lam x{:}nat.x,\lam x{:}nat.x]$}
+	\RightLabel{\textsc{(L-Wrld)}}
+	\UnaryInfC{$\Gamma \vdash nat\!\to\!nat \rhd [\langle1,1\rangle,\langle2,2\rangle] \rightsquigarrow \lam x{:}nat.x$}
+\end{prooftree}
+
+\textsc{(L-Base)} says that if you can learn a list of programs from its type and each $e_i$ is equivalent to some $\chi_i$ for $0\leq i\leq n$, then we can use each $\chi_i$ as an example output. For instance, $(\lam x{:}nat.x)1 =_\beta 1$. This means we can use $1$ as an example output for $(\lam x{:}nat.x)$. When learning, this rule is the "base" case. After exhausting the example information, this rule turns the learning process into learning from types.
+\begin{prooftree}
+\def\extraVskip{4pt}
+\def\labelSpacing{4pt}
+	\AxiomC{$\Gamma, 1{:}nat \vdash list\,nat \rightsquigarrow [(\lam x{:}nat.x)1]$}
+	\AxiomC{$(\lam x{:}nat.x)1 =_\beta 1$}
+	\RightLabel{\textsc{(L-Base)}}
+	\BinaryInfC{$\Gamma \vdash list\,nat \rhd [\langle1\rangle] \rightsquigarrow [(\lam x{:}nat.x)1]$}
+\end{prooftree}
+
+
+
+\textsc{(L-EAbs)} says that if you can learn a list of applications $[e_1\pi_1(\chi_1),\dots,e_n\pi_1(\chi_n)]$, then you can learn a list of abstractions $[e_1,\dots,e_n]$ from examples where each $\pi_1\chi_i$ are inputs for $0 \leq i \leq n$. Note that $\pi_1$ is the first projection of an example tuple.
+\begin{prooftree}
+\def\extraVskip{4pt}
+\def\labelSpacing{4pt}
+	\AxiomC{$\Gamma, 1{:}nat, 2{:}nat \vdash list\,nat \rhd [\langle1\rangle,\langle2\rangle] \rightsquigarrow [(\lam x{:}nat.x)1,(\lam x{:}nat.x)2]$}
+	\RightLabel{\textsc{(L-EAbs)}}
+	\UnaryInfC{$\Gamma \vdash list\,nat\!\to\!nat \rhd [\langle1,1\rangle,\langle2,2\rangle] \rightsquigarrow [\lam x{:}nat.x,\lam x{:}nat.x]$}
+\end{prooftree}
+
+\textsc{(L-ETAbs)} says that if you can learn a list of applications $[e_1\lceil\alpha\rceil,\dots,e_n\lceil\alpha\rceil]$, then you can learn a list of polymorphic abstractions $[e_1,\dots,e_n]$ from examples where each $\Lambda\alpha.\chi_i$ are inputs for $0 \leq i \leq n$.
+\begin{prooftree}
+\def\extraVskip{4pt}
+\def\labelSpacing{4pt}
+	\AxiomC{$\Gamma, \alpha \vdash list \,\alpha\!\to\!\alpha \rhd [\langle z,z\rangle] \rightsquigarrow [(\Lambda\alpha.\lam x{:}\alpha.x)\lceil\alpha\rceil]$}
+	\RightLabel{\textsc{(L-TAbs)}}
+	\UnaryInfC{$\Gamma \vdash list \,\forall\alpha.\alpha\!\to\!\alpha \rhd [\Lambda\alpha.\langle z,z\rangle] \rightsquigarrow [\Lambda\alpha.\lam x{:}\alpha.x]$}
+\end{prooftree}
+
+\textsc{(L-Sum)} says that if you can learn a list of programs whose input is type $\tau_a$ and another list of programs whose input is type $\tau_b$, then you can learn a list of program whose input is the sum type $\tau_a\!+\!\tau_b$ and whose examples contain inputs of both type $\tau_a$ and type $\tau_b$. During learning, this rule is perhaps the most useful. It lets you distribute examples when encountering sum types as inputs, which ends up creating two sub-problems, each of which dealing with a smaller set of examples, which are easier to satisfy. In the example, let $e \equiv case(b)\,of\, \iota_1(true) \mapsto false \mid \iota_2(false) \mapsto true$
+\begin{prooftree}
+    \def\extraVskip{1pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .4in}
+    \alwaysNoLine
+        \AxiomC{$\Gamma\vdash list \,bool \!\to\! bool \rhd [\langle true, false\rangle] \rightsquigarrow [\lam x{:}bool.false]$}
+        \UnaryInfC{$\Gamma\vdash list \,bool \!\to\! bool \rhd [\langle false, true\rangle] \rightsquigarrow [\lam y{:}bool.true]$}
+        \RightLabel{\textsc{(L-Sum)}}
+        \alwaysSingleLine
+        \def\extraVskip{4pt}
+        \UnaryInfC{$\Gamma \vdash list \,(bool\!+\!bool) \!\to\! bool \rhd [\langle true,false \rangle, \langle false, true\rangle] \rightsquigarrow [e,e]$}
+\end{prooftree}
+
+This new relation extends learning from types. Now System F can learn from examples too. So far, our presentation of learning is both sound and complete. You can learn every program in System F from types. We now show that these results hold when learning from examples too.
+
+\section{Metatheory}
+Because our aim is to show every program in System F is learnable from examples, we want to show that learning is still equivalent to typing. As with learning from types, we show both completeness and soundness of learning with respect to typing---giving us the equivalence. These proofs entail a bit more work, but are far simpler than similar presentations of metatheory for languages which permit learning from examples, e.g. \textsc{Myth} \cite{osera2015program}. The mathematical convenience is afforded by not introducing any machinery into System F for learning. 
+
+\subsection{Typing and Learning are still equivalent}
+
+To show completeness, we need to show that for any program in System F there exists a list of examples from which it can be learned. This turns out to be trivial. Hence, a stronger statement we want is that we can learn any program which is satisfied by a list of examples. It would be problematic if we could learn any program in System F, but only from a particular subset of the examples which describe that program. Showing both of these gives strong guarantees on learning. If a list of examples describes a program, you can learn that program---and this list exists for every program in System F.
+
+\begin{lemma}[\textsc{Completeness$_a$ of Learning}]
+If $\,\Gamma \vdash e : \tau$ then there exist some $[\chi_1,\dots,\chi_n]$ such that $\,\Gamma \vdash \tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow e$
+\label{completeness-learning-examples-a}
+\end{lemma}
+\begin{proof}
+For an arbitrary program $e$ of type $\tau$, let $[\langle e\rangle]$ constitute its example list. This example list has no input, only an ouput $e$. Hence the statemement $\,\Gamma \vdash \tau \rhd [\langle e\rangle] \rightsquigarrow e$ asks whether we can learn a program $e$ of type $\tau$ whose output is $e$. 
+
+Now, note that for any program $e =_\beta e$ by definition of the reflexive, transitive, and symmetric evaluation relation. Additionally, for any program $e$ of type $\tau$, a list $[e]$ can be learned from type $list\,\tau$. Because learning from types is complete, this works for any program.
+
+Knowing this, we can apply the following learning rules:
+\begin{prooftree}
+\def\extraVskip{4pt}
+\def\labelSpacing{4pt}
+	\AxiomC{$\,\Gamma,x{:}\tau \vdash list\,\tau \rightsquigarrow [e]$}
+	\AxiomC{$e=_\beta e$}
+	\RightLabel{\textsc{(L-Base)}}
+	\BinaryInfC{$\,\Gamma \vdash list\,\tau \rhd [\langle e\rangle] \rightsquigarrow [e]$}
+	\AxiomC{$e=_\beta e$}
+	\RightLabel{\textsc{(L-Wrld)}}
+	\BinaryInfC{$\,\Gamma \vdash \tau \rhd [\langle e\rangle] \rightsquigarrow e$}
+\end{prooftree}
+
+Hence for any program $e$ in System F, it can be learned from examples when the example is $[\langle e\rangle]$.
+\end{proof}
+
+This is nice, but the less interesting completeness result. We want to make sure that a list of examples which describes a program can be used to learn it. An example list satisfies (or describes) a program, where if the program is applied to the inputs, the corresponding outputs are equivalent.
+
+\begin{lemma}[\textsc{Completeness$_b$ of Learning}]
+If $\,\Gamma \vdash e : \tau$ and there exist some $[\chi_1,\dots,\chi_n]$ which satisfies $e$, then $\,\Gamma \vdash \tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow e$.
+\label{completeness-learning-examples-b}
+\end{lemma}
+\begin{proof}
+There are two general cases to prove, when $e$ has inputs and when $e$ has no inputs. For programs without input, see previous lemma. For programs with input let $\Gamma \vdash e : \tau$, where $[\chi_1,\dots,\chi_n]$ are examples which satisfy $e$. Because of Theorem \ref{equivalence-learning}, we also know $\Gamma \vdash \tau \rightsquigarrow e$. Because lists are learnable, we also know $\Gamma \vdash list\,\tau \rightsquigarrow [e_1,\dots,e_n]$, where $\bigwedge_{i=1}^n e_i =_\beta e_n$.
+\vspace{.3em}
+
+Now let's deconstruct each $\chi_i$ into its input and output components: $\langle\chi^{in}_i, \chi^{out}_i\rangle$. Since each $\chi_i$ satisfies $e$, it must be that $ \bigwedge_{i=1}^n e_i\chi_i^{in} =_\beta \chi_i^{out}$. Due to satisfaction, $e_i\chi_i^{in}$ is guaranteed to be well-typed. Hence $\Gamma,\bigcup_{i=1}^n\chi_i^{out}{:}\tau^{out}, \bigcup_{i=1}^n\chi_i^{in}{:}\tau^{in} \vdash list\,\tau^{out} \rightsquigarrow [e_1\chi_i^{in},\dots,e_n\chi_n^{in}]$. With this, we can apply the following rules:
+
+\begin{prooftree}
+\def\extraVskip{4pt}
+\def\labelSpacing{4pt}
+	\AxiomC{$\Gamma,\bigcup_{i=1}^n\chi_i^{out}{:}\tau^{out}, \bigcup_{i=1}^n\chi_i^{in}{:}\tau^{in} \vdash list\,\tau^{out} \rightsquigarrow [e_1\chi_i^{in},\dots,e_n\chi_n^{in}]$}
+	\AxiomC{$\bigwedge_{i=1}^n e_i\chi_i^{in} =_\beta \chi_i^{out}$}
+	\RightLabel{\textsc{(L-Base)}}
+	\BinaryInfC{$\Gamma,  \bigcup_{i=1}^n\chi_i^{in}{:}\tau^{in} \vdash list\,\tau^{out} \rhd [\langle\chi_1^{out}\rangle,\dots,\langle\chi_n^{out}\rangle] \rightsquigarrow [e_1\chi_i^{in},\dots,e_n\chi_n^{in}]$}
+	\RightLabel{\textsc{(L-EAbs)}}
+	\UnaryInfC{$\Gamma \vdash list\,\tau \rhd [\langle\chi_1^{in},\chi_1^{out}\rangle,\dots,\langle\chi_n^{in},\chi_n^{out}\rangle] \rightsquigarrow [e_1,\dots,e_n]$}
+\end{prooftree}
+Remembering that $\chi_i \equiv \langle\chi_i^{in},\chi_i^{out}\rangle$ and that $\bigwedge_{i=1}^n e_i =_\beta e_n$, we finally prove the necessary result.
+\begin{prooftree}
+\def\extraVskip{4pt}
+\def\labelSpacing{4pt}
+	\AxiomC{$\Gamma \vdash list\,\tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow [e_1,\dots,e_n]$}
+	\AxiomC{$\bigwedge_{i=1}^n e_i =_\beta e_n$}
+	\RightLabel{\textsc{(L-Wrld)}}
+	\BinaryInfC{$\Gamma \vdash \tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow e$}
+\end{prooftree}
+
+Note that if there are $n$ inputs to the examples which satisfy $e$, then \textsc{(L-EAbs)} must be applied $n$ times to fully reconstruct the examples.
+\end{proof}
+
+\begin{lemma}[\textsc{Soundness of Learning}]
+If $\,\Gamma \vdash \tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow e$ then $\Gamma \vdash e : \tau$
+\label{soundness-learning-examples}
+\end{lemma}
+\begin{proof}
+Case analysis on learning rules.
+
+\underline{Case 1}: \textsc{(L-Wrld)}\\
+We know that we can learn from examples a list of length $n$ where each entry is $e$.
+\begin{prooftree}
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .4in}
+        \AxiomC{$\Gamma \vdash list \,\tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow [e_1,\dots,e_n]$}
+        \AxiomC{$\bigwedge_{i=1}^n e_i =_\beta e_n$}
+        \RightLabel{\textsc{(L-Wrld)}}
+        \BinaryInfC{$\Gamma \vdash \tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow e$}
+\end{prooftree}
+After applying \textsc{(L-EAbs)} and \textsc{(L-Base)} it must be that $\Gamma \vdash list \,\tau' \rightsquigarrow [e_1\chi_1^{in},\dots,e_n\chi_n^{in}]$. The list is only learnable if each element is learnable, hence $\Gamma \vdash \tau' \rightsquigarrow e_i\chi_i^{in}$. And an application is only learnable if each side of the application is learnable, hence $\Gamma \vdash \tau \rightsquigarrow e$ (noting $e_i =_\beta e$). Because of the equivalence of learning from types and typing, we have $\Gamma \vdash e : \tau$. 
+
+\underline{Case 2}: \textsc{(L-Base)}\\
+We know we can learn learn from types a list of length $n$ where each entry is $e$.
+
+\begin{prooftree}
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .4in}
+        \AxiomC{$\Gamma, \bigcup_{i=1}^n \chi_i{:}\tau \vdash list \,\tau \rightsquigarrow [e_1,\dots,e_n]$}
+        \AxiomC{$\bigwedge_{i=1}^{n} e_i =_\beta \chi_i$}
+            \RightLabel{\textsc{(L-Base)}}
+        \BinaryInfC{$\Gamma \vdash list \,\tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow [e_1,\dots,e_n]$}
+\end{prooftree}
+
+The list is only learnable if each element is learnable, hence $\Gamma \vdash \tau \rightsquigarrow e$. Because of the equivalence of learning from types and typing, we have $\Gamma \vdash e : \tau$. 
+
+\underline{Case 3}: \textsc{(L-EAbs)}\\
+We know we can learn learn from types a list of length $n$ and type $\tau_b$ where each entry is $e\pi_1(\chi_i)$.
+
+\begin{prooftree}
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .4in}
+        \AxiomC{$\Gamma, \bigcup_{i=1}^n\pi_1(\chi_i){:}\tau_a \vdash list \,\tau_b \rhd [\pi_2(\chi_1),\dots,\pi_2(\chi_n)] \rightsquigarrow [e_1\pi_1(\chi_1),\dots,e_n\pi_1(\chi_n)]$}
+        \RightLabel{\textsc{(L-EAbs)}}
+        \UnaryInfC{$\Gamma \vdash list \,\tau_{a} \!\to\! \tau_b \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow [e_1,\dots,e_n]$}
+\end{prooftree}
+
+After applying \textsc{(L-Base)} it must be that $\Gamma, \bigcup_{i=1}^n\pi_1(\chi_i){:}\tau_a \vdash list \,\tau_b \rightsquigarrow [e_1\pi_1(\chi_1),\dots,e_n\pi_1(\chi_n)]$. The list is only learnable if each element is learnable, hence $\Gamma, \bigcup_{i=1}^n\pi_1(\chi_i){:}\tau_a \vdash \tau_b \rightsquigarrow e_1\pi_1(\chi_1)$. And an application is only learnable if each side of the application is learnable, hence $\Gamma \vdash \tau_a\!\to\!\tau_b \rightsquigarrow e$ (noting $e_i =_\beta e$). Because of the equivalence of learning from types and typing, we have $\Gamma \vdash e : \tau_a\!\to\!\tau_b$. 
+
+\underline{Case 4}: \textsc{(L-ETAbs)}\\
+Same strategy as Case 3, except using type application. 
+
+\underline{Case 5}: \textsc{(L-Sum)}\\
+After assuming \textsc{(L-Sum)}, reduces to proof of Case 3.
+\end{proof}
+\vspace{-1.0em}
+
+\begin{theorem}[\textsc{Equivalence of Typing and Learning}]
+If and only if $\,\Gamma \vdash \tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow e$, then $\Gamma \vdash e : \tau$ and $[\chi_1,\dots,\chi_n]$ satisfies $e$.
+\label{equivalence-learning-examples}
+\end{theorem}
+\begin{proof}
+Directly from Lemmas \ref{completeness-learning-examples-a}, \ref{completeness-learning-examples-b} and \ref{soundness-learning-examples}.
+\end{proof}
+\vspace{-.8em}
+
+Because we can only learn a program if and only if it is well typed, it follows that learned programs obey progress, preservation, and normalization. Each proof invokes the equivalence theorem between typing and learning, and then the respective progress, preservation, and normalization theorems for typing.
+
+\subsection{Learned programs still don't get stuck}
+
+\begin{corollary}[\textsc{Progress in Learning}]
+If $e$ is a learned program, then either $e$ is a value or else there is some program $e'$ such that $e \to_\beta e'$.
+\label{progress-learning}
+\end{corollary}
+\begin{proof}
+Directly from Theorems \ref{equivalence-learning-examples} and \ref{progress-typing}.
+\end{proof}
+\vspace{-.8em}
+
+We shouldn't be able to learn programs which get stuck during evaluation, same as with typing. If I learn a program, either its a value or it can be evaluated to another program. When learning from examples, learning still obeys progress.
+
+\subsection{Learned programs still don't change type}
+
+\begin{corollary}[\textsc{Preservation in Learning}]
+If $\,\Gamma \vdash \tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow e$ and $e \to_\beta e'$, then $\,\Gamma \vdash \tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow e'$.
+\label{preservation-learning}
+\end{corollary}
+\begin{proof}
+Directly from Theorems \ref{equivalence-learning-examples} and \ref{preservation-typing}. 
+\end{proof}
+\vspace{-.8em}
+
+We shouldn't be able to learn programs of a different type than the one provided. If I learn a program, and it evaluates to another program, then I should be able to learn that new program from the same type. When learning from examples, learning still obeys preservation.
+
+\subsection{Learned programs still always halt}
+
+\begin{corollary}[\textsc{Normalization in Evaluation}]
+Learned programs in System F always evaluate to a value, to a normal form.
+\label{normalization-learning}
+\end{corollary}
+\begin{proof}
+Directly from Theorems \ref{equivalence-learning-examples} and \ref{normalization-evaluation}. 
+\end{proof}
+\vspace{-.8em}
+
+We shouldn't be able to learn programs which never finish computing. They must halt. As with learning from types, learning from examples only lets you learn halting programs.
+
+\section{Learning identity, not, and successor}
+
+For examples, any program in System F can serve as input or output. There are no restrictions. In similar works which allow learning from examples, like \textsc{Myth} \cite{osera2015program}, there are restrictions on what examples can look like. Namely, functions cannot appear as output in an example. This makes it impossible to learn many higher-order programs. In fact, the motivation for this work started from observing this limitation in \textsc{Myth}. It made it impossible to learn compilers, higher-order programs which specify programming languages. 
+
+Here we show how to learn several programs from examples before discussing further the prospect of learning not only programs, but programming languages.
+
+\subsection{Learning polymorphic identity}
+
+\begin{lemma}[\textsc{Polymorphic identity is learnable}] $\cdot \vdash \forall\alpha.\alpha \!\to\! \alpha \rhd [\Lambda\alpha.\langle z,z\rangle] \rightsquigarrow \Lambda\alpha.\lam x{:}\alpha.x$
+\label{learning-poly-identity}
+\end{lemma}
+\begin{proof}
+
+\begin{enumerate}[label=\textit{(\roman*)}]
+
+\item $\alpha, z{:}\alpha \vdash \alpha\!\to\!\alpha \rightsquigarrow (\Lambda\alpha.\lam x{:}\alpha.x)\lceil\alpha\rceil$
+\begin{prooftree}
+\def\extraVskip{4pt}
+\def\labelSpacing{4pt}
+    \AxiomC{$x{:}nat \in \alpha, z{:}\alpha, x{:}\alpha$}
+    \RightLabel{\textsc{(L-Var)}}
+    \UnaryInfC{$\alpha, z{:}\alpha, x{:}\alpha \vdash \alpha \rightsquigarrow x$}
+    \RightLabel{\textsc{(L-Abs)}}
+    \UnaryInfC{$\alpha, z{:}\alpha \vdash \alpha\!\to\!\alpha \rightsquigarrow \lam x{:}\alpha.x$}
+    \RightLabel{\textsc{(L-TAbs)}}
+    \UnaryInfC{$\alpha, z{:}\alpha \vdash \forall\alpha.\alpha\!\to\!\alpha \rightsquigarrow \Lambda\alpha.\lam x{:}\alpha.x$}
+    \RightLabel{\textsc{(L-Abs)}}
+    \AxiomC{$\alpha, z{:}\alpha \vdash \alpha \rightsquigarrow \alpha$}
+    \RightLabel{\textsc{(L-App)}}
+    \BinaryInfC{$\alpha, z{:}\alpha \vdash \alpha\!\to\!\alpha \rightsquigarrow (\Lambda\alpha.\lam x{:}\alpha.x)\lceil\alpha\rceil$}
+    \alwaysNoLine
+    \UnaryInfC{}
+\end{prooftree}
+
+\item $\alpha, z{:}\alpha \vdash \alpha \rightsquigarrow (\Lambda\alpha.\lam x{:}\alpha.x)\lceil\alpha\rceil z$
+\begin{prooftree}
+\def\extraVskip{4pt}
+\def\labelSpacing{4pt}
+    \AxiomC{\textit{(i)}}
+    \UnaryInfC{$\alpha, z{:}\alpha \vdash \alpha\!\to\!\alpha \rightsquigarrow (\Lambda\alpha.\lam x{:}\alpha.x)\lceil\alpha\rceil$}
+    \AxiomC{$z{:}\alpha \in \alpha, z{:}\alpha$}
+    \RightLabel{\textsc{(L-Var)}}
+    \UnaryInfC{$\alpha, z{:}\alpha \vdash \alpha \rightsquigarrow z$}
+    \RightLabel{\textsc{(L-App)}}
+    \BinaryInfC{$\alpha, z{:}\alpha \vdash \alpha \rightsquigarrow (\Lambda\alpha.\lam x{:}\alpha.x)\lceil\alpha\rceil z$}
+    \alwaysNoLine
+    \UnaryInfC{}
+\end{prooftree}
+
+\item $\alpha, z{:}\alpha \vdash list\,\alpha \rightsquigarrow [(\Lambda\alpha.\lam x{:}\alpha.x)\lceil\alpha\rceil z]$
+\begin{prooftree}
+\def\extraVskip{4pt}
+\def\labelSpacing{4pt}
+    \AxiomC{\textit{(ii)}}
+    \UnaryInfC{$\alpha, z{:}\alpha \vdash \alpha \rightsquigarrow (\Lambda\alpha.\lam x{:}\alpha.x)\lceil\alpha\rceil z$}
+    \AxiomC{$\alpha, z{:}\alpha \vdash list \,\alpha \rightsquigarrow [\,]$}
+    \RightLabel{\textsc{(L-Cons)}}
+    \BinaryInfC{$\alpha, z{:}\alpha \vdash list\,\alpha \rightsquigarrow [(\Lambda\alpha.\lam x{:}\alpha.x)\lceil\alpha\rceil z]$}
+    \alwaysNoLine
+    \UnaryInfC{}
+\end{prooftree}
+
+\item $\cdot \vdash \forall\alpha.\alpha \!\to\! \alpha \rhd [\Lambda\alpha.\langle z,z\rangle] \rightsquigarrow \Lambda\alpha.\lam x{:}\alpha.x$
+\begin{prooftree}
+\def\extraVskip{4pt}
+\def\labelSpacing{4pt}
+    \AxiomC{\textit{(iii)}}
+    \UnaryInfC{$\alpha, z{:}\alpha \vdash list\,\alpha \rightsquigarrow [(\Lambda\alpha.\lam x{:}\alpha.x)\lceil\alpha\rceil z]$}
+    \AxiomC{$(\Lambda\alpha.\lam x{:}\alpha.x)\lceil\alpha\rceil z =_\beta z$}
+    \RightLabel{\textsc{(L-Base)}}
+    \alwaysSingleLine
+    \def\extraVskip{4pt}
+    \BinaryInfC{$\alpha, z{:}\alpha \vdash list\,\alpha \rhd [\langle z\rangle] \rightsquigarrow [(\Lambda\alpha.\lam x{:}\alpha.x)\lceil\alpha\rceil z]$}
+    \RightLabel{\textsc{(L-EAbs)}}
+    \UnaryInfC{$\alpha \vdash list\,\alpha \!\to\! \alpha \rhd [\langle z,z\rangle] \rightsquigarrow [(\Lambda\alpha.\lam x{:}\alpha.x)\lceil\alpha\rceil]$}
+    \RightLabel{\textsc{(L-ETAbs)}}
+    \UnaryInfC{$\cdot \vdash list\,\forall\alpha.\alpha \!\to\! \alpha \rhd [\Lambda\alpha.\langle z,z\rangle] \rightsquigarrow [\Lambda\alpha.\lam x{:}\alpha.x]$}
+    \RightLabel{\textsc{(L-Wrld)}}
+    \UnaryInfC{$\cdot \vdash \forall\alpha.\alpha \!\to\! \alpha \rhd [\Lambda\alpha.\langle z,z\rangle] \rightsquigarrow \Lambda\alpha.\lam x{:}\alpha.x$}
+    \alwaysNoLine
+    \UnaryInfC{}
+\end{prooftree}
+
+\end{enumerate}
+\end{proof}
+
+\subsection{Learning boolean not}
+\begin{lemma}[\textsc{Not is learnable}] \begin{singlespace}$\cdot \vdash (bool\!+\!bool)\!\to\!bool \rhd [\langle true,false \rangle, \langle false, true\rangle] \rightsquigarrow e$
+
+\textsc{Note:} $e \equiv case(b)\,of\, \iota_1(true) \mapsto false \mid \iota_2(false) \mapsto true$. Additionally, that $true$ and $false$ are learnable from any context. \end{singlespace}
+\label{learning-boolean-not}
+\end{lemma}
+\begin{proof}
+
+\begin{enumerate}[label=\textit{(\roman*)}]
+
+\item $true{:}bool \vdash bool \rightsquigarrow (\lam x{:}bool.false)true$
+\begin{prooftree}
+    \alwaysSingleLine
+    \def\extraVskip{4pt}
+    		\AxiomC{$true{:}bool, x{:}bool \vdash bool \rightsquigarrow false$}
+    		\RightLabel{\textsc{(L-Abs)}}
+        \UnaryInfC{$true{:}bool \vdash bool \rightsquigarrow \lam x{:}bool.false$}
+        \AxiomC{$true{:}bool \in true{:}bool$}
+        \RightLabel{\textsc{(L-Var)}}
+        \UnaryInfC{$true{:}bool \vdash bool \rightsquigarrow true$}
+        \RightLabel{\textsc{(L-App)}}
+        \BinaryInfC{$true{:}bool \vdash bool \rightsquigarrow (\lam x{:}bool.false)true$}
+
+		
+\end{prooftree}
+
+
+\item $\cdot\vdash list \,bool \!\to\! bool \rhd [\langle true, false\rangle] \rightsquigarrow [\lam x{:}bool.false]$
+\begin{prooftree}
+    \alwaysSingleLine
+    \def\extraVskip{4pt}
+    		\AxiomC{\textit{(i)}}
+    		\AxiomC{$true{:}bool \vdash list\,bool \rightsquigarrow []$}
+    		\RightLabel{\textsc{(L-Cons)}}
+        \BinaryInfC{$true{:}bool \vdash list\,bool \rightsquigarrow [(\lam x{:}bool.false)true]$}
+        \AxiomC{$(\lam x{:}bool.false)true =_\beta false$}
+        \RightLabel{\textsc{(L-Sum)}}
+        \BinaryInfC{$true{:}bool \vdash list bool \rhd [\langle false\rangle] \rightsquigarrow [(\lam x{:}bool.false)true]$}
+        \RightLabel{\textsc{(L-EAbs)}}
+		\UnaryInfC{$\Gamma\vdash list \,bool \!\to\! bool \rhd [\langle true, false\rangle] \rightsquigarrow [\lam x{:}bool.false]$}
+\end{prooftree}
+
+
+\item $false{:}bool \vdash list\,bool \rightsquigarrow (\lam y{:}bool.true)false$
+\begin{prooftree}
+    \alwaysSingleLine
+    \def\extraVskip{4pt}
+    		\AxiomC{$false{:}bool, y{:}bool \vdash bool \rightsquigarrow true$}
+    		\RightLabel{\textsc{(L-Abs)}}
+        \UnaryInfC{$false{:}bool \vdash bool \rightsquigarrow \lam y{:}bool.true$}
+        \AxiomC{$false{:}bool \in false{:}bool$}
+        \RightLabel{\textsc{(L-Var)}}
+        \UnaryInfC{$false{:}bool \vdash bool \rightsquigarrow false$}
+        \RightLabel{\textsc{(L-App)}}
+        \BinaryInfC{$false{:}bool \vdash bool \rightsquigarrow (\lam y{:}bool.true)false$}
+
+		
+\end{prooftree}
+
+
+\item $\cdot\vdash list \,bool \!\to\! bool \rhd [\langle false, true\rangle] \rightsquigarrow [\lam y{:}bool.true]$
+\begin{prooftree}
+    \alwaysSingleLine
+    \def\extraVskip{4pt}
+    		\AxiomC{\textit{(iii)}}
+    		\AxiomC{$false{:}bool \vdash list\,bool \rightsquigarrow []$}
+    		\RightLabel{\textsc{(L-Cons)}}
+        \BinaryInfC{$false{:}bool \vdash list\,bool \rightsquigarrow [(\lam y{:}bool.true)false]$}
+        \AxiomC{$(\lam y{:}bool.true)false =_\beta true$}
+        \RightLabel{\textsc{(L-Sum)}}
+        \BinaryInfC{$false{:}bool \vdash list bool \rhd [\langle true\rangle] \rightsquigarrow [(\lam y{:}bool.true)false]$}
+        \RightLabel{\textsc{(L-EAbs)}}
+		\UnaryInfC{$\cdot\vdash list \,bool \!\to\! bool \rhd [\langle false, true\rangle] \rightsquigarrow [\lam y{:}bool.true]$}
+\end{prooftree}
+
+
+\item $\cdot \vdash (bool\!+\!bool)\!\to\!bool \rhd [\langle true,false \rangle, \langle false, true\rangle] \rightsquigarrow e$
+\begin{prooftree}
+    \alwaysSingleLine
+    \def\extraVskip{4pt}
+        \AxiomC{\textit{(ii)}}
+        \AxiomC{\textit{(iii)}}
+        \RightLabel{\textsc{(L-Sum)}}
+        \BinaryInfC{$\cdot \vdash list \,(bool\!+\!bool) \!\to\! bool \rhd [\langle true,false \rangle, \langle false, true\rangle] \rightsquigarrow [e,e]$}
+        \RightLabel{\textsc{(L-Wrld)}}
+		\UnaryInfC{$\cdot \vdash (bool\!+\!bool)\!\to\!bool \rhd [\langle true,false \rangle, \langle false, true\rangle] \rightsquigarrow e$}
+\end{prooftree}
+\end{enumerate}
+\end{proof}
+
+
+\subsection{Learning church successor}
+
+\begin{lemma}[\textsc{Successor is learnable}] \begin{singlespace} Let $church \equiv \forall\alpha.(\alpha\!\to\!\alpha)\!\to\!\alpha\!\to\!\alpha$, $\bar{0} \equiv \Lambda\alpha.\lam f{:}\alpha\!\to\!\alpha.\lam x{:}\alpha.x$, $\bar{1} \equiv \Lambda\alpha.\lam f{:}\alpha\!\to\!\alpha.\lam x{:}\alpha.fx$, and $succ \equiv \lam n{:}church.\Lambda\alpha.\lam f{:}\alpha\!\to\!\alpha.\lam x{:}\alpha.f(n \lceil\alpha\rceil f x)$. And assume that $\bar{0}$, $\bar{1}$, and $succ$ can be learned from any context.
+
+Show $\cdot \vdash church\!\to\!church \rhd [\langle\bar{0},\bar{1}\rangle] \rightsquigarrow succ$.\end{singlespace}
+\label{learning-succ}
+\end{lemma}
+
+\begin{proof}
+
+\begin{enumerate}[label=\textit{(\roman*)}]
+
+\item $\bar{0}{:}church \vdash church\!\to\!church \rightsquigarrow succ$
+
+\textsc{Note:} Can be learned from any context.
+
+\item $\cdot \vdash church\!\to\!church \rhd [\langle\bar{0},\bar{1}\rangle] \rightsquigarrow succ$
+\begin{prooftree}
+    \alwaysSingleLine
+    \def\extraVskip{4pt}
+    		\AxiomC{\textit{(i)}}
+    		\AxiomC{$\bar{0}{:}church \in \bar{0}{:}church$}
+    		\UnaryInfC{$\bar{0}{:}church \vdash church \rightsquigarrow \bar{0}$}
+    		\BinaryInfC{$\bar{0}{:}church \vdash church \rightsquigarrow (succ)\bar{0}$}
+    		\AxiomC{$\bar{0}{:}church \vdash list\,church \rightsquigarrow []$}
+    		\BinaryInfC{$\bar{0}{:}church \vdash list\,church \rightsquigarrow [(succ)\bar{0}]$}
+    		\AxiomC{$(succ)\bar{0} =_\beta \bar{1}$}
+    		\RightLabel{\textsc{(L-Base)}}
+        \BinaryInfC{$\cdot \vdash list\,church \rhd [\langle\bar{1}\rangle] \rightsquigarrow [(succ)\bar{0}]$}
+        \RightLabel{\textsc{(L-EAbs)}}
+        \UnaryInfC{$\cdot \vdash list\,church\!\to\!church \rhd [\langle\bar{0},\bar{1}\rangle] \rightsquigarrow [succ]$}
+        \RightLabel{\textsc{(L-Wrld)}}
+        \UnaryInfC{$\cdot \vdash church\!\to\!church \rhd [\langle\bar{0},\bar{1}\rangle] \rightsquigarrow succ$}
+\end{prooftree}
+
+
+\end{enumerate}
+\end{proof}
+
+\section{Learning from Examples, Practically}
 % present the augmented relation
 % state completeness/soundness result
 
