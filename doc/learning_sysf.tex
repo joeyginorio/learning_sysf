@@ -95,7 +95,7 @@
 \begin{document}
 
 %% Title information
-\title{Learning in System F}
+\title{Learning in System F (Synthesis Pearl)}
 
 %% Author information
 %% Contents and number of authors suppressed with 'anonymous'.
@@ -300,7 +300,7 @@ The decision procedure checks that two programs exist in the transitive reflexiv
 % present the augmented relation
 % state completeness/soundness result
 
-\section{Implementation}
+%\section{Implementation}
 
 We have implemented a proof-of-concept prototype, with promising results.
 (Reviewers: see the artifact attached.)
@@ -313,7 +313,7 @@ We have implemented a proof-of-concept prototype, with promising results.
 %    - sum types split examples
 %	 - product types generate subproblems
 
-\section{Experiments}
+%\section{Experiments}
 
 The implementation of learning from types is in the function {\tt genTerms} in {\tt learning.hs}. All the code in this section is in Haskell and runs in {\tt ghci}:
 \begin{verbatim}
@@ -342,26 +342,39 @@ The implementation ``works'' minus a programs which require multiple type applic
 
 \section{Related Work}
 
+The literature on synthesis is both vast and rapidly expanding. Therefore, we inevitably cherry-pick among approaches that have inspired us while covering a varied landscape as well.
+
 \subsection{Type-driven synthesis}
 
-The seminal works (cite) of Osera et al. demonstrates that you can have none-``magical'' approaches to synthesis: everything is predictable, such as for instance, needing trace-complete examples (cite). We take inspiration from this work, and suggest a way forward for examples with higher-order functions in the input/output exammples.
+The seminal works on type-driven synthesis by \citet{osera2015program}. demonstrates that you can have none-``magical'' approaches to synthesis: everything is predictable, such as for instance, needing trace-complete examples. We take inspiration from this work, and suggest a way forward for examples with higher-order functions in the input/output exammples. We do not require trace completeness for System F is strongly normalizing.
 
-Polikarpova et al. (cite) have extended the typed-driven approaach to refinement types. This is interesting because refinement types, such as Liquid Types (cite), are rather expressive and the types can act as rich specification. Our work extends the type-driven approach in an orthogonal direction.
+\citet{polikarpova2016program} have extended the typed-driven approaach to refinement types. This is interesting because refinement types, such as Liquid Types~\cite{lrondon2012liquid} are rather expressive and the types can act as rich specification. The idea of liquid types has been researched in many languages beyond the initial ML-style setting: for example, Javascript~\cite{chugh2012nested} and Haskell~\cite{liquidhaskell}. Our work extends the type-driven approach in an orthogonal direction.
 
 \subsection{Other approaches to synthesis}
 
-While the literature on synthesis is vast, we focus on three interesting alternatives to type-driven synthesis.
+Program Sketching~\cite{solar2008program} has been a promising approach to synthesis. It relies on specification and holes. We rely on types instead of full-blown specifications.
 
-Program Sketching has been the most promising approach to synthesis. It relies on specification and holes.
+Microsoft Prose~\cite{msprose} has enabled the program demonstration of
+Excel. The Microsoft team has packaged the lessons learned from
+FlashFill~\cite{gulwani2011automating}  into a generic framework Flash Meta~\cite{flashmeta}. The key
+insight is that witness functions (also known as reverse semantics)
+are enough to speed up synthesis a for a domain-specific language. In
+Prose, the synthesizer author defines a grammar for the language, the
+semantics and the inverse semantics, and the framework automagically
+creates the synthesizer.
 
-Microsoft Prose (cite) has enabled the program demonstration of Excel. The Microsoft team has packaged the lessons learned from FlashFill (cite) into a generic framework Flash Meta (cite).
+Rosette~\cite{rosette} is a solver-aided language framework that similarly enables a separation of concern between domain and generic solving, based on satisfiability modulo theory underneath the hood. In Rosette, one can write a vanilla interpreter and get a synthesizer.
 
-Another term for synthesis is program induction.
-Metagol...
-Neural-Guided Search uses neural networks \emph{not} for creating programs but for guiding the search on the symbolic possibilities.
+Another term for synthesis used in the learning community is program induction.
+Differentiable programming such as for Forth~\cite{dforth} and Datalog~\cite{ddatalog} use relaxation techniques to go from symbol to neural.
+Neural-Guided Search~\cite{webyrd-nips,dreamcoder} uses neural networks \emph{not} for creating programs but for guiding the search on the symbolic possibilities.
+
+Inductive logic programming~\cite{ilp} provides a classical avenue for synthesis in Prolog and related programming languages. An exciting recent development is the work of~\citet{cropper} in which programs are learned through failures.
+
 
 \section{Conclusion}
 
+We offer a promising route to type-driven synthesis through learning in System F. Our main insight is that System F provides a fruitful ground for further synthesis work. In addition to a declarative theory, we developed a small implementation to testbed our ideas.
 
 %% Acknowledgments
 %%\begin{acks}                            %% acks environment is optional
