@@ -10,6 +10,7 @@ module Learning where
 import SystemF
 import qualified Data.Map as Map
 import qualified Data.List as List
+import qualified Data.Set as Set
 
 
 {-========================= Generators from Type =============================-}
@@ -73,20 +74,46 @@ genTmApps typ12 ctx n =
       apps = foldl (++) [] [cartProd fs xs | (fs, xs) <- fxs]
       in [TmApp f x | (f,x) <- apps]
 
-helpTmTApps :: Type -> Id -> [(Type, Type)]
-helpTmTApps (TyUnit) i = [(TyTAbs i TyUnit, TyUnit),
-                             (TyTAbs i (TyVar i), TyUnit)]
-helpTmTApps (TyBool) i = [(TyTAbs i TyBool, TyUnit),
-                             (TyTAbs i (TyVar i), TyBool)]
-helpTmTApps (TyVar _) i = []
-helpTmTApps typ@(TyAbs typ1 typ2) i
-  | typ1 /= typ2 = [(TyTAbs i typ, TyUnit),
-                    (TyTAbs i (TyAbs typ1 (TyVar i)), typ2),
-                    (TyTAbs i (TyAbs (TyVar i) typ2), typ1)]
-  | typ1 == typ2 = [(TyTAbs i typ, TyUnit),
-                    ((TyTAbs i (TyAbs typ1 (TyVar i))), typ2),
-                    ((TyTAbs i (TyAbs (TyVar i) typ2)), typ1),
-                    ((TyTAbs i (TyAbs (TyVar i) (TyVar i))), typ1)]
+helpTmTApps1 :: Type -> Id -> [(Type, Type, Id)]
+helpTmTApps1 (TyUnit) i = [(TyVar i, TyUnit, i)]
+helpTmTApps1 (TyBool) i = [(TyVar i, TyBool, i)]
+helpTmTApps1 (TyVar _) _ = []
+helpTmTApps1 (TyAbs typ1@(TyAbs _ _) typ2@(TyAbs _ _)) i =
+  let fst' (x,y,z) = x
+      snd' (x,y,z) = y
+      tapps1 = helpTmTApps1 typ1 i
+      tapps2 = helpTmTApps1 typ2 i
+      in [(TyAbs (TyVar i) typ2, typ1, i)] ++
+         [(TyAbs typ1 (TyVar i), typ2, i)] ++
+         [(TyAbs (fst' tapp1) typ2, (snd' tapp1), i) | tapp1 <- tapps1] ++
+         [(TyAbs typ1 (fst' tapp2), (snd' tapp2), i) | tapp2 <- tapps2]
+helpTmTApps1 (TyAbs typ1@(TyAbs _ _) typ2) i =
+  let fst' (x,y,z) = x
+      snd' (x,y,z) = y
+      tapps1 = helpTmTApps1 typ1 i
+      tapps2 = helpTmTApps1 typ2 i
+      in [(TyAbs (TyVar i) typ2, typ1, i)] ++
+         [(TyAbs (fst' tapp1) typ2, (snd' tapp1), i) | tapp1 <- tapps1] ++
+         [(TyAbs typ1 (fst' tapp2), (snd' tapp2), i) | tapp2 <- tapps2]
+helpTmTApps1 (TyAbs typ1 typ2@(TyAbs _ _)) i =
+  let fst' (x,y,z) = x
+      snd' (x,y,z) = y
+      tapps1 = helpTmTApps1 typ1 i
+      tapps2 = helpTmTApps1 typ2 i
+      in [(TyAbs typ1 (TyVar i), typ2, i)] ++
+         [(TyAbs (fst' tapp1) typ2, (snd' tapp1), i) | tapp1 <- tapps1] ++
+         [(TyAbs typ1 (fst' tapp2), (snd' tapp2), i) | tapp2 <- tapps2]
+helpTmTApps1 (TyAbs typ1 typ2) i =
+  let fst' (x,y,z) = x
+      snd' (x,y,z) = y
+      tapps1 = helpTmTApps1 typ1 i
+      tapps2 = helpTmTApps1 typ2 i
+      in [(TyAbs (fst' tapp1) typ2, (snd' tapp1), i) | tapp1 <- tapps1] ++
+         [(TyAbs typ1 (fst' tapp2), (snd' tapp2), i) | tapp2 <- tapps2]
+
+-- TmTapps2 will take tmtapps1 output and generate all X->X->Unit, Bool from
+-- X->Bool->Unit, Bool.
+
 
 -- Generates all type applications at type to some AST depth n
 genTmTApps :: Type -> Context -> Int -> [Term]
