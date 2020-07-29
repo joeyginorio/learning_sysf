@@ -113,7 +113,15 @@ helpTmTApps1 (TyAbs typ1 typ2) i =
 
 -- TmTapps2 will take tmtapps1 output and generate all X->X->Unit, Bool from
 -- X->Bool->Unit, Bool.
+helpTmTApps2 :: [(Type, Type, Id)] -> [Int]
+helpTmTApps2 tapps =
+  let snds = Set.toList (foldr (\(x,y,z) a -> Set.insert y a) Set.empty tapps)
+      indtapps = [List.findIndices (\(typ,fill,i) -> fill==t) tapps | t <- snds]
+      indtapps' = filter (\x -> length x > 1) indtapps
+      indtapps'' = [x | (x:xs) <- indtapps']
+      in indtapps''
 
+helpTmTApps
 
 -- Generates all type applications at type to some AST depth n
 genTmTApps :: Type -> Context -> Int -> [Term]
