@@ -74,55 +74,6 @@ genTmApps typ12 ctx n =
       apps = foldl (++) [] [cartProd fs xs | (fs, xs) <- fxs]
       in [TmApp f x | (f,x) <- apps]
 
-helpTmTApps1 :: Type -> Id -> [(Type, Type, Id)]
-helpTmTApps1 (TyUnit) i = [(TyVar i, TyUnit, i)]
-helpTmTApps1 (TyBool) i = [(TyVar i, TyBool, i)]
-helpTmTApps1 (TyVar _) _ = []
-helpTmTApps1 (TyAbs typ1@(TyAbs _ _) typ2@(TyAbs _ _)) i =
-  let fst' (x,y,z) = x
-      snd' (x,y,z) = y
-      tapps1 = helpTmTApps1 typ1 i
-      tapps2 = helpTmTApps1 typ2 i
-      in [(TyAbs (TyVar i) typ2, typ1, i)] ++
-         [(TyAbs typ1 (TyVar i), typ2, i)] ++
-         [(TyAbs (fst' tapp1) typ2, (snd' tapp1), i) | tapp1 <- tapps1] ++
-         [(TyAbs typ1 (fst' tapp2), (snd' tapp2), i) | tapp2 <- tapps2]
-helpTmTApps1 (TyAbs typ1@(TyAbs _ _) typ2) i =
-  let fst' (x,y,z) = x
-      snd' (x,y,z) = y
-      tapps1 = helpTmTApps1 typ1 i
-      tapps2 = helpTmTApps1 typ2 i
-      in [(TyAbs (TyVar i) typ2, typ1, i)] ++
-         [(TyAbs (fst' tapp1) typ2, (snd' tapp1), i) | tapp1 <- tapps1] ++
-         [(TyAbs typ1 (fst' tapp2), (snd' tapp2), i) | tapp2 <- tapps2]
-helpTmTApps1 (TyAbs typ1 typ2@(TyAbs _ _)) i =
-  let fst' (x,y,z) = x
-      snd' (x,y,z) = y
-      tapps1 = helpTmTApps1 typ1 i
-      tapps2 = helpTmTApps1 typ2 i
-      in [(TyAbs typ1 (TyVar i), typ2, i)] ++
-         [(TyAbs (fst' tapp1) typ2, (snd' tapp1), i) | tapp1 <- tapps1] ++
-         [(TyAbs typ1 (fst' tapp2), (snd' tapp2), i) | tapp2 <- tapps2]
-helpTmTApps1 (TyAbs typ1 typ2) i =
-  let fst' (x,y,z) = x
-      snd' (x,y,z) = y
-      tapps1 = helpTmTApps1 typ1 i
-      tapps2 = helpTmTApps1 typ2 i
-      in [(TyAbs (fst' tapp1) typ2, (snd' tapp1), i) | tapp1 <- tapps1] ++
-         [(TyAbs typ1 (fst' tapp2), (snd' tapp2), i) | tapp2 <- tapps2]
-
--- TmTapps2 will take tmtapps1 output and generate all X->X->Unit, Bool from
--- X->Bool->Unit, Bool.
-helpTmTApps2 :: [(Type, Type, Id)] -> [Int]
-helpTmTApps2 tapps =
-  let snds = Set.toList (foldr (\(x,y,z) a -> Set.insert y a) Set.empty tapps)
-      indtapps = [List.findIndices (\(typ,fill,i) -> fill==t) tapps | t <- snds]
-      indtapps' = filter (\x -> length x > 1) indtapps
-      indtapps'' = [x | (x:xs) <- indtapps']
-      in indtapps''
-
-helpTmTApps
-
 -- Generates all type applications at type to some AST depth n
 genTmTApps :: Type -> Context -> Int -> [Term]
 genTmTApps typ ctx n =
@@ -134,6 +85,46 @@ genTmTApps typ ctx n =
       tapps = foldl (++) [] [cartProd fs xs | (fs, xs) <- fxs]
       in [TmTApp f x | (f,x) <- tapps,
                        typeCheck (TmTApp f x) ctx == Right typ]
+
+mapCondType :: (Type -> Type) -> Type -> [Bool] -> Type -> Type
+mapCondType f styp [] typ = typ
+mapCondType f styp (b:bs) (TyUnit)
+  | styp == TyUnit && b = f TyUnit
+  | otherwise           = TyUnit
+mapCondType f styp (b:bs) (TyBool)
+  | styp == TyBool && b = f TyBool
+  | otherwise           = TyBool
+mapCondType f styp (b:bs) typ@(TyVar i)
+  | styp == typ && b = f typ
+  | otherwise        = typ
+mapCondType f styp (b:bs) typ@(TyAbs typ1 typ2)
+  | styp == typ && b  = f typ
+  | styp == typ1      = (TyAbs (mapCondType f styp (b:bs) typ1)
+                               (mapCondType f styp (bs) typ2))
+  | styp == typ2      = (TyAbs (mapCondType f styp (bs) typ1)
+                               (mapCondType f styp (b:bs) typ2))
+  | otherwise         = (TyAbs (mapCondType f styp (fst splitConds) typ1)
+                               (mapCondType f styp (snd splitConds) typ2))
+                        where stypCount1 = countType styp typ1
+                              splitConds = splitAt stypCount1 (b:bs)
+
+getTypes :: Type -> Set.Set Type
+getTypes typ@(TyAbs typ1 typ2) = Set.insert typ (Set.union (getTypes typ1)
+                                                           (getTypes typ2))
+getTypes typ@(TyTAbs i typ') = Set.insert typ (getTypes typ')
+getTypes typ = Set.singleton typ
+
+
+countType :: Type -> Type -> Int
+countType styp typ@(TyAbs typ1 typ2)
+  | styp == typ = 1
+  | otherwise   = countType styp typ1 + countType styp typ2
+countType styp typ@(TyTAbs i typ')
+  | styp == typ = 1
+  | otherwise   = countType styp typ'
+countType styp typ
+  | styp == typ = 1
+  | otherwise   = 0
 
 -- Generates all elimination terms at type to some AST depth n
 genETerms :: Type -> Context -> Int -> [Term]
