@@ -41,7 +41,7 @@ data Type = TyUnit
           | TyVar Id
           | TyAbs Type Type
           | TyTAbs Id Type
-          deriving (Eq)
+          deriving (Eq, Ord)
 
 -- For pretty printing types
 instance Show Type where
