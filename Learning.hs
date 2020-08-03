@@ -85,6 +85,32 @@ genTmTApps typ ctx n =
       tapps = foldl (++) [] [cartProd fs xs | (fs, xs) <- fxs]
       in [TmTApp f x | (f,x) <- tapps,
                        typeCheck (TmTApp f x) ctx == Right typ]
+{-
+1. Generate all possible LHS,RHS types for TApp.
+2. Filter context by LHS, pair with RHS. (fTyp, x)
+3. Now (genETerms typ ctx (fst sz), x if sizeTyp x == (snd sz))
+
+-}
+
+{-
+1. get all subtypes
+2. for each subtype, calculate how many times it occurs
+3. now generate bools for each
+
+-}
+genTAppsType :: Type -> [(Type, Type)]
+genTAppsType typ =
+  let subtyps = Set.toList (getTypes typ)
+      subtypsCount = [countType styp typ | styp <- subtyps]
+      condss = [tail (sequence (replicate scount [False,True])) |
+                scount <- subtypsCount]
+      fxs = [(mapCondType (\x -> if x == styp then (TyVar "X") else x)
+              styp
+              cond
+              typ, styp) | (styp,conds) <- (zip subtyps condss), cond <- conds]
+      in fxs
+
+
 
 mapCondType :: (Type -> Type) -> Type -> [Bool] -> Type -> Type
 mapCondType f styp [] typ = typ
