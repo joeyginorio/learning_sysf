@@ -46,7 +46,8 @@ genTyTAbs ctx n =
 
 -- Generates all term variables at type
 genTmVars :: Type -> Context -> [Term]
-genTmVars typ ctx = [TmVar i | (TmBind i typ') <- ctx, typ' == typ]
+genTmVars typ ctx = [TmVar i | (TmBind i typ') <- ctx,
+                                betaEqualTy typ' typ freshTyVars]
 
 extractFTo :: Type -> Type -> Context -> Int -> [Type]
 -- extractFTo typ t@(TyTAbs i typ') ctx n =
@@ -74,43 +75,33 @@ genTmApps typ12 ctx n =
       apps = foldl (++) [] [cartProd fs xs | (fs, xs) <- fxs]
       in [TmApp f x | (f,x) <- apps]
 
--- Generates all type applications at type to some AST depth n
+
 genTmTApps :: Type -> Context -> Int -> [Term]
 genTmTApps typ ctx n =
   let cartProd xs ys = [(x,y) | x <- xs, y <- ys]
       szs = [(n1, n - 1 - n1) | n1 <- [1..(n-1)]]
       fTyps = [t | TmBind i t@(TyTAbs _ _) <- ctx]
-      fxs = [(genETerms typf ctx (fst sz), genITypes ctx (snd sz)) |
-             typf@(TyTAbs _ _) <- fTyps, sz <- szs]
+      tapptyps = genTAppsType typ
+      fxs = [(genETerms ftyp ctx (fst sz), [x]) |
+             (ftyp, x) <- tapptyps, sz <- szs, sizeType x == (snd sz)]
       tapps = foldl (++) [] [cartProd fs xs | (fs, xs) <- fxs]
-      in [TmTApp f x | (f,x) <- tapps,
-                       typeCheck (TmTApp f x) ctx == Right typ]
-{-
-1. Generate all possible LHS,RHS types for TApp.
-2. Filter context by LHS, pair with RHS. (fTyp, x)
-3. Now (genETerms typ ctx (fst sz), x if sizeTyp x == (snd sz))
+      in [TmTApp f x | (f,x) <- tapps]
 
--}
-
-{-
-1. get all subtypes
-2. for each subtype, calculate how many times it occurs
-3. now generate bools for each
-
--}
 genTAppsType :: Type -> [(Type, Type)]
 genTAppsType typ =
   let subtyps = Set.toList (getTypes typ)
       subtypsCount = [countType styp typ | styp <- subtyps]
       condss = [tail (sequence (replicate scount [False,True])) |
                 scount <- subtypsCount]
-      fxs = [(mapCondType (\x -> if x == styp then (TyVar "X") else x)
+      fxs = [(TyTAbs "$TApp"
+              (mapCondType (\x -> if x == styp then (TyVar "$TApp") else x)
               styp
               cond
-              typ, styp) | (styp,conds) <- (zip subtyps condss), cond <- conds]
-      in fxs
+              typ), styp) | (styp,conds) <- (zip subtyps condss), cond <- conds]
+      in (TyTAbs "$TApp" typ, TyUnit):fxs
 
-
+-- getTypeVars :: Context -> [Id]
+-- getTypeVars 
 
 mapCondType :: (Type -> Type) -> Type -> [Bool] -> Type -> Type
 mapCondType f styp [] typ = typ
@@ -124,15 +115,18 @@ mapCondType f styp (b:bs) typ@(TyVar i)
   | styp == typ && b = f typ
   | otherwise        = typ
 mapCondType f styp (b:bs) typ@(TyAbs typ1 typ2)
-  | styp == typ && b  = f typ
-  | styp == typ1      = (TyAbs (mapCondType f styp (b:bs) typ1)
-                               (mapCondType f styp (bs) typ2))
-  | styp == typ2      = (TyAbs (mapCondType f styp (bs) typ1)
-                               (mapCondType f styp (b:bs) typ2))
-  | otherwise         = (TyAbs (mapCondType f styp (fst splitConds) typ1)
-                               (mapCondType f styp (snd splitConds) typ2))
-                        where stypCount1 = countType styp typ1
-                              splitConds = splitAt stypCount1 (b:bs)
+  | styp == typ && b = f typ
+  | styp == typ1     = (TyAbs (mapCondType f styp (b:bs) typ1)
+                              (mapCondType f styp (bs) typ2))
+  | styp == typ2     = (TyAbs (mapCondType f styp (bs) typ1)
+                              (mapCondType f styp (b:bs) typ2))
+  | otherwise        = (TyAbs (mapCondType f styp (fst splitConds) typ1)
+                              (mapCondType f styp (snd splitConds) typ2))
+                       where stypCount1 = countType styp typ1
+                             splitConds = splitAt stypCount1 (b:bs)
+mapCondType f styp (b:bs) typ@(TyTAbs i typ')
+  | styp == typ && b = f typ
+  | otherwise        = (TyTAbs i (mapCondType f styp (b:bs) typ'))
 
 getTypes :: Type -> Set.Set Type
 getTypes typ@(TyAbs typ1 typ2) = Set.insert typ (Set.union (getTypes typ1)
@@ -245,6 +239,14 @@ betaEqualTm (TmTAbs x1 trm1) (TmTAbs x2 trm2) fvs@(i:is) =
       trm2' = subTypeTerm x2 (TyVar i) trm2 fvs
       in betaEqualTm trm1' trm2' is
 betaEqualTm trm1 trm2 _ = trm1 == trm2
+
+-- Beta equality of types
+betaEqualTy :: Type -> Type -> [Id] -> Bool
+betaEqualTy ty1@(TyTAbs i1 typ1) ty2@(TyTAbs i2 typ2) (i:is) =
+  let (TyTAbs _ typ1') = replaceTyVar i1 i ty1
+      (TyTAbs _ typ2') = replaceTyVar i2 i ty2
+      in betaEqualTy typ1' typ2' is
+betaEqualTy typ1 typ2 _ = typ1 == typ2
 
 
 {-================== Generators from Type & Examples =========================-}
