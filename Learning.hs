@@ -50,14 +50,19 @@ genTmVars typ ctx = [TmVar i | (TmBind i typ') <- ctx,
                                 betaEqualTy typ' typ freshTyVars]
 
 extractFTo :: Type -> Type -> Context -> Int -> [Type]
--- extractFTo typ t@(TyTAbs i typ') ctx n =
---   let styps = genITypes ctx 1
---       rtyps = [subType i styp typ' freshTyVars | styp <- styps]
---       in concat [extractFTo typ rtyp ctx n | rtyp <- rtyps]
+-- extractFTo typ t@(TyTAbs i typ') ctx n
+  -- | typ == typ' = [t]
+  -- | otherwise   = extractFTo typ typ' ctx n
 extractFTo typ t@(TyAbs typ1 typ2) ctx n
   | typ == typ2 = [t]
   | otherwise   = extractFTo typ typ2 ctx n
+extractFTo typ t@(TyTAbs i typ') ctx n
+  | typ == typ' = [t]
+  | otherwise   = concat [extractFTo typ t' ctx n | t' <- ts]
+                  where styps = genTypes ctx n
+                        ts = [subType i styp typ' ["$x1","$x2","$x3"]| styp <- styps]
 extractFTo typ typ' ctx n = []
+
 
 extractFsTo :: Type -> Context -> Int -> [Type]
 extractFsTo typ ctx n =
@@ -99,9 +104,6 @@ genTAppsType typ =
               cond
               typ), styp) | (styp,conds) <- (zip subtyps condss), cond <- conds]
       in (TyTAbs "$TApp" typ, TyUnit):fxs
-
--- getTypeVars :: Context -> [Id]
--- getTypeVars 
 
 mapCondType :: (Type -> Type) -> Type -> [Bool] -> Type -> Type
 mapCondType f styp [] typ = typ
