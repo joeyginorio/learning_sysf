@@ -114,12 +114,13 @@ genTAppsType typ =
       subtypsCount = [countType styp typ | styp <- subtyps]
       condss = [tail (sequence (replicate scount [False,True])) |
                 scount <- subtypsCount]
-      fxs = [(TyTAbs "$TApp"
-              (mapCondType (\x -> if x == styp then (TyVar "$TApp") else x)
+      i = "$TApp" ++ show (sizeType typ)
+      fxs = [(TyTAbs i
+              (mapCondType (\x -> if x == styp then (TyVar i) else x)
               styp
               cond
               typ), styp) | (styp,conds) <- (zip subtyps condss), cond <- conds]
-      in (TyTAbs "$TApp" typ, TyUnit):fxs
+      in (TyTAbs i typ, TyUnit):fxs
 
 mapCondType :: (Type -> Type) -> Type -> [Bool] -> Type -> Type
 mapCondType f styp [] typ = typ
@@ -339,4 +340,5 @@ lrnTerms (TyTAbs i typ) exs@((InTy _ _):_) ctx ltrms n =
       ltrms' = zipWith TmTApp ftrms ityps
       exs' = [ex | (InTy _ ex) <- exs]
       in lrnTerms typ exs' ctx ltrms' (n-1)
+
 
