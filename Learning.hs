@@ -42,31 +42,47 @@ genTyTAbs _ 0 = []
 genTyTAbs ctx n =
   let tyvs = [i | (TyBind i) <- ctx]
       typs = genITypes ctx (n-1)
-      in [TyTAbs i typ | i <- tyvs, typ <- typs]
+      in [TyTAbs i typ | i <- tyvs,
+                         typ <- (genITypes
+                                (filter (\x -> x /= TyBind i) ctx)
+                                (n-1))]
 
 -- Generates all term variables at type
 genTmVars :: Type -> Context -> [Term]
 genTmVars typ ctx = [TmVar i | (TmBind i typ') <- ctx,
                                 betaEqualTy typ' typ freshTyVars]
 
-extractFTo :: Type -> Type -> Context -> Int -> [Type]
--- extractFTo typ t@(TyTAbs i typ') ctx n
-  -- | typ == typ' = [t]
-  -- | otherwise   = extractFTo typ typ' ctx n
-extractFTo typ t@(TyAbs typ1 typ2) ctx n
-  | typ == typ2 = [t]
-  | otherwise   = extractFTo typ typ2 ctx n
-extractFTo typ t@(TyTAbs i typ') ctx n
-  | typ == typ' = [t]
-  | otherwise   = concat [extractFTo typ t' ctx n | t' <- ts]
+
+extractFTo :: Type -> Type -> Context -> Int -> [Id] -> Set.Set Type
+extractFTo typ t@(TyAbs typ1 typ2) ctx n fvs
+  | typ == typ2 = Set.singleton t
+  | otherwise   = extractFTo typ typ2 ctx n fvs
+extractFTo typ t@(TyTAbs i typ') ctx n fvs
+  | typ == typ' = Set.singleton t
+  | otherwise   = foldr Set.union Set.empty [extractFTo typ t' ctx n fvs | t' <- ts]
                   where styps = genTypes ctx n
-                        ts = [subType i styp typ' ["$x1","$x2","$x3"]| styp <- styps]
-extractFTo typ typ' ctx n = []
+                        styps' = filter
+                                 (\x -> retType x == typ || retType x == (TyVar i))
+                                 styps
+                        ts = [subType i styp typ' fvs | styp <- styps']
+                        ctx' = [b | b@(TmBind _ _) <- ctx]
+extractFTo typ typ' ctx n fvs = Set.empty
 
+retType :: Type -> Type
+retType (TyUnit) = TyUnit
+retType (TyBool) = TyBool
+retType (TyVar i) = TyVar i
+retType (TyAbs typ1 typ2) = retType typ2
+retType (TyTAbs i typ) = retType typ
 
+-- This is SUPER slow.
 extractFsTo :: Type -> Context -> Int -> [Type]
 extractFsTo typ ctx n =
-  let ftyps = List.nub (concat [extractFTo typ ftyp ctx n | (TmBind _ ftyp) <- ctx])
+  let ftyps = Set.toList (foldr
+                          Set.union
+                          Set.empty
+                          [extractFTo typ ftyp ctx n freshTyVars |
+                                           (TmBind _ ftyp) <- ctx])
       in ftyps
 
 -- Generates all term applications at type to some AST depth n
@@ -76,7 +92,7 @@ genTmApps typ12 ctx n =
       szs = [(n1, n - 1 - n1) | n1 <- [1..(n-1)]]
       fxs = [(genETerms typ ctx (fst sz), genITerms typ11' ctx (snd sz)) |
              sz <- szs,
-             typ@(TyAbs typ11' _) <- extractFsTo typ12 ctx (fst sz)]
+             typ@(TyAbs typ11' _) <- extractFsTo typ12 ctx (fst sz) ]
       apps = foldl (++) [] [cartProd fs xs | (fs, xs) <- fxs]
       in [TmApp f x | (f,x) <- apps]
 
