@@ -53,6 +53,7 @@ genTmVars typ ctx = [TmVar i | (TmBind i typ') <- ctx,
                                 betaEqualTy typ' typ freshTyVars]
 
 
+-- Extracts the most direct function type/subtype to typ1 from typ2
 extractFTo :: Type -> Type -> Context -> Int -> [Id] -> Set.Set Type
 extractFTo typ t@(TyAbs typ1 typ2) ctx n fvs
   | typ == typ2 = Set.singleton t
@@ -68,6 +69,7 @@ extractFTo typ t@(TyTAbs i typ') ctx n fvs
                         ctx' = [b | b@(TmBind _ _) <- ctx]
 extractFTo typ typ' ctx n fvs = Set.empty
 
+-- Extracts the return type of a type
 retType :: Type -> Type
 retType (TyUnit) = TyUnit
 retType (TyBool) = TyBool
@@ -75,6 +77,7 @@ retType (TyVar i) = TyVar i
 retType (TyAbs typ1 typ2) = retType typ2
 retType (TyTAbs i typ) = retType typ
 
+-- Extracts all function types to a type given a context
 -- This is SUPER slow.
 extractFsTo :: Type -> Context -> Int -> [Type]
 extractFsTo typ ctx n =
@@ -96,7 +99,7 @@ genTmApps typ12 ctx n =
       apps = foldl (++) [] [cartProd fs xs | (fs, xs) <- fxs]
       in [TmApp f x | (f,x) <- apps]
 
-
+-- Generates all type applications at type to some AST depth n
 genTmTApps :: Type -> Context -> Int -> [Term]
 genTmTApps typ ctx n =
   let cartProd xs ys = [(x,y) | x <- xs, y <- ys]
@@ -108,6 +111,7 @@ genTmTApps typ ctx n =
       tapps = foldl (++) [] [cartProd fs xs | (fs, xs) <- fxs]
       in [TmTApp f x | (f,x) <- tapps]
 
+-- Generates all possible type applications at type (independent of context)
 genTAppsType :: Type -> [(Type, Type)]
 genTAppsType typ =
   let subtyps = Set.toList (getTypes typ)
@@ -122,6 +126,7 @@ genTAppsType typ =
               typ), styp) | (styp,conds) <- (zip subtyps condss), cond <- conds]
       in (TyTAbs i typ, TyUnit):fxs
 
+-- Maps a function to each subtype in a type, conditional on some proposition
 mapCondType :: (Type -> Type) -> Type -> [Bool] -> Type -> Type
 mapCondType f styp [] typ = typ
 mapCondType f styp (b:bs) (TyUnit)
@@ -147,13 +152,14 @@ mapCondType f styp (b:bs) typ@(TyTAbs i typ')
   | styp == typ && b = f typ
   | otherwise        = (TyTAbs i (mapCondType f styp (b:bs) typ'))
 
+-- Extracts set of subtypes in a type
 getTypes :: Type -> Set.Set Type
 getTypes typ@(TyAbs typ1 typ2) = Set.insert typ (Set.union (getTypes typ1)
                                                            (getTypes typ2))
 getTypes typ@(TyTAbs i typ') = Set.insert typ (getTypes typ')
 getTypes typ = Set.singleton typ
 
-
+-- Counts instances of subtype in type
 countType :: Type -> Type -> Int
 countType styp typ@(TyAbs typ1 typ2)
   | styp == typ = 1
