@@ -5,6 +5,9 @@ Defines syntax, typing, evaluation for System F. Follows the specification in
 Chapter 2 of "Learning in System F".
 -}
 
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DeriveGeneric #-}
 module SystemF where
 
 import qualified Data.Map as Map
@@ -51,6 +54,12 @@ instance Show Type where
   show (TyAbs typ1 typ2) = concat ["(", show typ1, " -> ", show typ2, ")"]
   show (TyTAbs i typ) = concat ["(", i, ".", show typ, ")"]
 
+-- For memoizing with MemoTrie
+instance HasTrie Type where
+  newtype (Type :->: b) = TypeTrie {unTypeTrie :: Reg Type :->: b}
+  trie = trieGeneric TypeTrie
+  untrie = untrieGeneric unTypeTrie
+  enumerate = enumerateGeneric unTypeTrie
 
 {- =============================== Typing  =================================-}
 
