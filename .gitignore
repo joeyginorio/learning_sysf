@@ -7,3 +7,9 @@
 */*.blg
 */*.dvi
 */*.lof
+*.o
+*.hi
+*.hp
+*.prof
+*.ps
+*.aux
