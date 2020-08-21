@@ -14,6 +14,6 @@ genId ctx n =
 
 main = do
   let ctx = []
-  let n   = 20
+  let n   = 30
   let tms = genId ctx n
   print $ tms

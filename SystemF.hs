@@ -12,6 +12,8 @@ module SystemF where
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import Data.MemoTrie
+import GHC.Generics (Generic)
 
 
 {- ====================== Syntax of Terms & Types  ==========================-}
@@ -44,7 +46,7 @@ data Type = TyUnit
           | TyVar Id
           | TyAbs Type Type
           | TyTAbs Id Type
-          deriving (Eq, Ord)
+          deriving (Eq, Ord, Generic)
 
 -- For pretty printing types
 instance Show Type where
@@ -61,11 +63,19 @@ instance HasTrie Type where
   untrie = untrieGeneric unTypeTrie
   enumerate = enumerateGeneric unTypeTrie
 
+
 {- =============================== Typing  =================================-}
 
 data Binding = TmBind Id Type
              | TyBind Id
-             deriving (Eq, Show)
+             deriving (Eq, Show, Generic)
+
+-- For memoizing with MemoTrie
+instance HasTrie Binding where
+  newtype (Binding :->: b) = BindingTrie {unBindingTrie :: Reg Binding :->: b}
+  trie = trieGeneric BindingTrie
+  untrie = untrieGeneric unBindingTrie
+  enumerate = enumerateGeneric unBindingTrie
 
 type Context = [Binding]
 
