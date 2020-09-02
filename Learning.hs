@@ -34,7 +34,7 @@ genTyAbs ctx n =
   let cartProd xs ys = [(x,y) | x <- xs, y <- ys]
       szs = [(n1, n - 1 - n1) | n1 <- [1..(n-1)]]
       typs = [(genITypes ctx (fst sz), genITypes ctx (snd sz)) | sz <- szs]
-      abss = foldl (++) [] [cartProd ty1s ty2s | (ty1s, ty2s) <- typs]
+      abss = foldr (++) [] [cartProd ty1s ty2s | (ty1s, ty2s) <- typs]
       in [TyAbs typ1 typ2 | (typ1, typ2) <- abss]
 
 -- Generates all universal type abstractions to some AST depth n
@@ -97,7 +97,7 @@ genTmApps typ12 ctx n =
       fxs = [(genETerms typ ctx (fst sz), genITerms typ11' ctx (snd sz)) |
              sz <- szs,
              typ@(TyAbs typ11' _) <- extractFsTo typ12 ctx (fst sz) ]
-      apps = foldl (++) [] [cartProd fs xs | (fs, xs) <- fxs]
+      apps = foldr (++) [] [cartProd fs xs | (fs, xs) <- fxs]
       in [TmApp f x | (f,x) <- apps]
 
 -- Generates all type applications at type to some AST depth n
@@ -109,7 +109,7 @@ genTmTApps typ ctx n =
       tapptyps = genTAppsType typ
       fxs = [(genETerms ftyp ctx (fst sz), [x]) |
              (ftyp, x) <- tapptyps, sz <- szs, sizeType x == (snd sz)]
-      tapps = foldl (++) [] [cartProd fs xs | (fs, xs) <- fxs]
+      tapps = foldr (++) [] [cartProd fs xs | (fs, xs) <- fxs]
       in [TmTApp f x | (f,x) <- tapps]
 
 -- Generates all possible type applications at type (independent of context)
@@ -230,11 +230,11 @@ genITypes ctx n = (genTyAbs ctx n) ++ (genTyTAbs ctx n) ++ (genETypes ctx n)
 
 -- Generates all types to some AST depth n
 genTypes :: Context -> Int -> [Type]
-genTypes ctx n = foldl (++) [] [genITypes ctx n' | n' <- [0..n]]
+genTypes ctx n = foldr (++) [] [genITypes ctx n' | n' <- [0..n]]
 
 -- Generates all terms to some AST depth n
 genTerms :: Type -> Context -> Int -> [Term]
-genTerms typ ctx n = foldl (++) [] [genITerms typ ctx n' | n' <- [0..n]]
+genTerms typ ctx n = foldr (++) [] [genITerms typ ctx n' | n' <- [0..n]]
 
 
 {-=============================== Examples ===================================-}
@@ -354,9 +354,5 @@ lrnTerms (TyTAbs i typ) exs@((InTy _ _):_) ctx ltrms n =
       exs' = [ex | (InTy _ ex) <- exs]
       in lrnTerms typ exs' ctx ltrms' (n-1)
 
-
-{-
-optimizations to do:
--- exploit eta long forms to reduce search space
--- factorize the generators so that they hit the cache more often
--}
+learnTerms :: Type -> [Example] -> Context -> Int -> [Term]
+learnTerms typ exs ctx n = foldr (++) [] [lrnTerms typ exs ctx [] n' | n' <- [0..n]]
