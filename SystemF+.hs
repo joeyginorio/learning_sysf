@@ -11,10 +11,11 @@ TODO
 - semantics (typechecker, eval)
 -}
 
-{- ====================== Syntax of Terms & Types  ==========================-}
+{- ================= Syntax of Terms & Types & Patterns ======================-}
 type Id = String
 type Constr = String
 
+-- Syntax of Terms
 data Term = TmUnit
           | TmTrue
           | TmFalse
@@ -23,24 +24,50 @@ data Term = TmUnit
           | TmApp Term Term
           | TmTAbs Id Term
           | TmTApp Term Type
-          | TmFst Term
-          | TmSnd Term
-          | TmProd Term Term
-          | TmInL Term
-          | TmInR Term
-          | TmSCase Term (Id,Term) (Id,Term)
-          | TmVCase Id [(Pattern, Term)]
-          deriving (Eq, Show)
+          | TmCase Id [(Pattern, Term)]
+          deriving (Eq)
 
+-- For pretty printing terms
+instance Show Term where
+  show (TmUnit) = "unit"
+  show (TmTrue) = "tt"
+  show (TmFalse) = "ff"
+  show (TmVar i) = id i
+  show (TmAbs i typ trm) = concat ["(", "lam ", i, ":", "(", show typ, ").",
+                                   show trm, ")"]
+  show (TmApp trm1 trm2) = "(" ++ show trm1 ++ ")" ++ show trm2
+  show (TmTAbs i trm) = concat ["(", "forall ", i, ".", show trm, ")"]
+  show (TmTApp trm typ) = "(" ++ show trm ++ ")" ++ show typ
+  show (TmCase i ps) = concat $ ["case ", show i, " of \n"] ++ [unlines ps']
+                       where ps' = map showPTm ps
+                             showPTm (p,tm) = "\t" ++ show p ++ " => " ++ show tm
+
+-- Syntax of Types
 data Type = TyUnit
           | TyBool
+          | TyVar Id
           | TyAbs Type Type
           | TyTAbs Id Type
-          | TyProd Type Type
-          | TySum Type Type
-          | TyVariant [(Constr, [Type])]
-          deriving (Eq, Show)
+          | TyCase [(Constr, [Type])]
+          deriving (Eq)
 
-data Pattern = 
+-- For pretty printing types
+instance Show Type where
+  show (TyUnit) = "Unit"
+  show (TyBool) = "Bool"
+  show (TyVar i) = i
+  show (TyAbs typ1 typ2) = concat ["(", show typ1, " -> ", show typ2, ")"]
+  show (TyTAbs i typ) = concat ["(", i, ".", show typ, ")"]
+
+-- Syntax of Patterns
+data Pattern = PVar Id
+             | PConstr Constr [Pattern]
+             deriving (Eq)
+
+-- For pretty printing patterns
+instance Show Pattern where
+  show (PVar i) = ' ':i
+  show (PConstr c ps) = concat $ [" (", c] ++ ps' ++ [")"]
+                        where ps' = map show ps
 
 
