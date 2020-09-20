@@ -38,12 +38,12 @@ showTm (TmAbs i typ trm) = parens $ (text "lam ") <+> (text i) <+> (text ":") <+
                            parens (showTy typ) <+> (text ".") <+>
                            (nest 3 $ line <+> showTm trm)
 showTm (TmCase i ps) = text "case " <+> text i <+> text " of" <+>
-                       (nest 3 $ line <+> showCase ps)
+                       (nest 3 $ line <+> showTmCase ps)
 
-showCase :: [(Pattern, Term)] -> Doc
-showCase [] = nil
-showCase ((p,t):pts) = showPn p <+> text " -> " <+> showTm t <+> line <+>
-                       showCase pts
+showTmCase :: [(Pattern, Term)] -> Doc
+showTmCase [] = nil
+showTmCase ((p,t):pts) = showPn p <+> text " -> " <+> showTm t <+> line <+>
+                       showTmCase pts
 
 
 -- Syntax of Types
@@ -66,6 +66,13 @@ showTy (TyBool) = text "Bool"
 showTy (TyVar i) = text i
 showTy (TyAbs typ1 typ2) = parens $ showTy typ1 <+> text " -> " <+> showTy typ2
 showTy (TyTAbs i typ) = parens $ text i <+> text "." <+> showTy typ
+showTy (TyCase cts) = showTyCase cts
+
+showTyCase :: [(Constr, [Type])] -> Doc
+showTyCase [] = nil
+showTyCase ((c,ts):cts) = parens (text c <+> text ":" <+> ts') <+> text "+" <+>
+                          showTyCase cts
+                          where ts' = sepby "*" (map showTy ts)
 
 -- Syntax of Patterns
 data Pattern = PVar Id
