@@ -5,11 +5,7 @@ Defines syntax, typing, evaluation for System F+. A sugared version of System F
 with sum/products + let statements.
 -}
 
-{-
-TODO
-- syntax
-- semantics (typechecker, eval)
--}
+import PPrinter
 
 {- ================= Syntax of Terms & Types & Patterns ======================-}
 type Id = String
@@ -24,23 +20,31 @@ data Term = TmUnit
           | TmApp Term Term
           | TmTAbs Id Term
           | TmTApp Term Type
+          | TmLet [(Id,Term)] Term
           | TmCase Id [(Pattern, Term)]
           deriving (Eq)
 
 -- For pretty printing terms
 instance Show Term where
-  show (TmUnit) = "unit"
-  show (TmTrue) = "tt"
-  show (TmFalse) = "ff"
-  show (TmVar i) = id i
-  show (TmAbs i typ trm) = concat ["(", "lam ", i, ":", "(", show typ, ").",
-                                   show trm, ")"]
-  show (TmApp trm1 trm2) = "(" ++ show trm1 ++ ")" ++ show trm2
-  show (TmTAbs i trm) = concat ["(", "forall ", i, ".", show trm, ")"]
-  show (TmTApp trm typ) = "(" ++ show trm ++ ")" ++ show typ
-  show (TmCase i ps) = concat $ ["case ", show i, " of \n"] ++ [unlines ps']
-                       where ps' = map showPTm ps
-                             showPTm (p,tm) = "\t" ++ show p ++ " => " ++ show tm
+  show tm = layout $ showTm tm
+
+  -- Pretty print terms
+showTm :: Term -> Doc
+showTm (TmUnit) = text "unit"
+showTm (TmTrue) = text "tt"
+showTm (TmFalse) = text "ff"
+showTm (TmVar i) = text i
+showTm (TmAbs i typ trm) = parens $ (text "lam ") <+> (text i) <+> (text ":") <+>
+                           parens (showTy typ) <+> (text ".") <+>
+                           (nest 3 $ line <+> showTm trm)
+showTm (TmCase i ps) = text "case " <+> text i <+> text " of" <+>
+                       (nest 3 $ line <+> showCase ps)
+
+showCase :: [(Pattern, Term)] -> Doc
+showCase [] = nil
+showCase ((p,t):pts) = showPn p <+> text " -> " <+> showTm t <+> line <+>
+                       showCase pts
+
 
 -- Syntax of Types
 data Type = TyUnit
@@ -53,11 +57,15 @@ data Type = TyUnit
 
 -- For pretty printing types
 instance Show Type where
-  show (TyUnit) = "Unit"
-  show (TyBool) = "Bool"
-  show (TyVar i) = i
-  show (TyAbs typ1 typ2) = concat ["(", show typ1, " -> ", show typ2, ")"]
-  show (TyTAbs i typ) = concat ["(", i, ".", show typ, ")"]
+  show typ = layout $ showTy typ
+
+-- Pretty print types
+showTy :: Type -> Doc
+showTy (TyUnit) = text "Unit"
+showTy (TyBool) = text "Bool"
+showTy (TyVar i) = text i
+showTy (TyAbs typ1 typ2) = parens $ showTy typ1 <+> text " -> " <+> showTy typ2
+showTy (TyTAbs i typ) = parens $ text i <+> text "." <+> showTy typ
 
 -- Syntax of Patterns
 data Pattern = PVar Id
@@ -66,8 +74,10 @@ data Pattern = PVar Id
 
 -- For pretty printing patterns
 instance Show Pattern where
-  show (PVar i) = ' ':i
-  show (PConstr c ps) = concat $ [" (", c] ++ ps' ++ [")"]
-                        where ps' = map show ps
+  show p = layout $ showPn p
 
-
+showPn :: Pattern -> Doc
+showPn (PVar i) = text i
+showPn (PConstr c []) = nil
+showPn (PConstr c (p:ps)) = text c <+> text " " <+> showPn p <+>
+                            showPn (PConstr c ps)
