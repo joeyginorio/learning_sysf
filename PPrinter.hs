@@ -47,3 +47,8 @@ parens x = text "(" <+> x <+> text ")"
 
 angles :: Doc -> Doc
 angles x = text "<" <+> x <+> text ">"
+
+sepby :: String -> [Doc] -> Doc
+sepby s [] = nil
+sepby s (d:[]) = d
+sepby s (d:ds) = d <+> text s <+> sepby s ds
