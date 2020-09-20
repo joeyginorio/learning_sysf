@@ -4,7 +4,7 @@ PPrinter.hs
 Pretty printing based off Wadler's "Prettier printer" paper.
 -}
 
-module PPrinter where 
+module PPrinter where
 
 {-============================ CUSTOM INFIX OPS ==============================-}
 infixr 6 <+>
@@ -18,6 +18,9 @@ data Doc = Nil
 {-=========================== CORE COMBINATORS ===============================-}
 nil :: Doc
 nil = Nil
+
+line :: Doc
+line = 0 `Line` nil
 
 (<+>) :: Doc -> Doc -> Doc
 (s `Text` x) <+> y = s `Text` (x <+> y)
@@ -33,3 +36,14 @@ layout :: Doc -> String
 layout (s `Text` x) = s ++ layout x
 layout (i `Line` x) = '\n': replicate i ' ' ++ layout x
 layout (Nil)        = ""
+
+
+{-=========================== UTILITY COMBINATORS ============================-}
+text :: String -> Doc
+text s = s `Text` nil
+
+parens :: Doc -> Doc
+parens x = text "(" <+> x <+> text ")"
+
+angles :: Doc -> Doc
+angles x = text "<" <+> x <+> text ">"
