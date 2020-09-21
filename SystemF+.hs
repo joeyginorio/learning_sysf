@@ -31,17 +31,25 @@ data Term = TmUnit
 instance Show Term where
   show tm = layout $ showTm tm
 
-  -- Pretty print terms
+-- Pretty print terms
 showTm :: Term -> Doc
 showTm (TmUnit) = text "unit"
 showTm (TmTrue) = text "tt"
 showTm (TmFalse) = text "ff"
 showTm (TmVar i) = text i
-showTm (TmAbs i typ trm) = parens $ (text "lam ") <+> (text i) <+> (text ":") <+>
+showTm (TmAbs i typ tm) = parens $ (text "lam ") <+> (text i) <+> (text ":") <+>
                            parens (showTy typ) <+> (text ".") <+>
-                           (nest 3 $ line <+> showTm trm)
+                           (nest 3 $ line <+> showTm tm)
+showTm (TmLet bs tm) = text "let " <+> (nest 4 $ showTmLet bs <+> line <+>
+                       text "in " <+> showTm tm)
 showTm (TmCase i ps) = text "case " <+> text i <+> text " of" <+>
                        (nest 3 $ line <+> showTmCase ps)
+
+showTmLet :: [(Id,Term)] -> Doc
+showTmLet [] = nil
+showTmLet ((i,tm):[]) = text i <+> text " = " <+> showTm tm
+showTmLet ((i,tm):bs) = text i <+> text " = " <+> showTm tm <+> line <+>
+                        showTmLet bs
 
 showTmCase :: [(Pattern, Term)] -> Doc
 showTmCase [] = nil
@@ -88,6 +96,7 @@ data Pattern = PnVar Id
 instance Show Pattern where
   show p = layout $ showPn p
 
+-- Pretty print patterns
 showPn :: Pattern -> Doc
 showPn (PnVar i) = text i
 showPn (PnConstr c []) = nil
@@ -144,25 +153,37 @@ typeCheck (TmUnit) _ = Right TyUnit
 typeCheck (TmTrue) _ = Right TyBool
 typeCheck (TmFalse) _ = Right TyBool
 typeCheck (TmVar i) ctx = typeFromContext i ctx
-typeCheck (TmAbs i typ trm) ctx = do
-  typ' <- typeCheck trm ((TmBind i typ):ctx)
-  return (TyAbs typ typ')
-typeCheck (TmApp trm1 trm2) ctx = do
-  typ1 <- typeCheck trm1 ctx
-  typ2 <- typeCheck trm2 ctx
-  case typ1 of
-    (TyAbs typ11 typ12)
-      | typ11 == typ2 -> Right $ typ12
-      | otherwise -> Left $ ErApp1 trm1 trm2
-    _ -> Left $ ErApp2 trm1
-typeCheck (TmTAbs i trm) ctx = do
-  typ <- typeCheck trm ((TyBind i):ctx)
-  return (TyTAbs i typ)
-typeCheck (TmTApp trm typ) ctx = do
-  typ' <- typeCheck trm ctx
-  case typ' of
-    (TyTAbs i typ'') -> Right $ subType i typ typ'' freshTyVars
-    _                -> Left $ ErTApp trm
+typeCheck (TmAbs i ty tm) ctx =
+  do ty' <- typeCheck tm ((TmBind i ty):ctx)
+     return (TyAbs ty ty')
+typeCheck (TmApp tm1 tm2) ctx =
+  do ty1 <- typeCheck tm1 ctx
+     ty2 <- typeCheck tm2 ctx
+     case ty1 of
+       (TyAbs ty11 ty12)
+         | ty11 == ty2 -> Right $ ty12
+         | otherwise -> Left $ ErApp1 tm1 tm2
+       _ -> Left $ ErApp2 tm1
+typeCheck (TmTAbs i tm) ctx =
+  do ty <- typeCheck tm ((TyBind i):ctx)
+     return (TyTAbs i ty)
+typeCheck (TmTApp tm ty) ctx =
+  do ty' <- typeCheck tm ctx
+     case ty' of
+       (TyTAbs i ty'') -> Right $ subType i ty ty'' freshTyVars
+       _                -> Left $ ErTApp tm
+-- typeCheck (TmLet [] tm) ctx = typeCheck tm ctx
+-- typeCheck (TmLet ((i,tm):bs) tm') ctx =
+  -- do ty <- typeCheck tm ctx
+     -- ty' <- typeCheck (TmLet bs tm') ((TmBind i ty):ctx)
+     -- return ty'
+typeCheck (TmLet itms tm) ctx =
+  let itms' = sequence $ map (\(i,t) -> typeCheck t ctx) itms
+      in case itms' of
+           (Right []) -> typeCheck tm ctx
+           (Right tys) -> typeCheck tm (ctx' ++ ctx)
+                          where ctx' = zipWith (\x y -> TmBind (fst x) y) itms tys
+           (Left e) -> Left e
 
 
 {- =============================== Evaluation  =================================-}
