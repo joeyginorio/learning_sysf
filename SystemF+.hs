@@ -24,7 +24,8 @@ data Term = TmUnit
           | TmTAbs Id Term
           | TmTApp Term Type
           | TmLet [(Id,Term)] Term
-          | TmCase Id [(Pattern, Term)]
+          | TmConstr Constr [Term] Type
+          | TmCase Term [(Pattern, Term)]
           deriving (Eq)
 
 -- For pretty printing terms
@@ -46,7 +47,9 @@ showTm (TmTAbs i tm) = parens $ text "forall " <+> text i <+> text "." <+>
 showTm (TmTApp tm ty) = parens $ showTm tm <+> text " " <+> showTy ty
 showTm (TmLet bs tm) = text "let " <+> (nest 4 $ showTmLet bs <+> line <+>
                        text "in " <+> showTm tm)
-showTm (TmCase i ps) = text "case " <+> text i <+> text " of" <+>
+showTm (TmConstr c tms ty) = text c <+> text " " <+> sepby " " (map showTm tms)
+                             <+> text " as " <+> showTy ty
+showTm (TmCase t ps) = text "case " <+> showTm t <+> text " of" <+>
                        (nest 3 $ line <+> showTmCase ps)
 
 showTmLet :: [(Id,Term)] -> Doc
@@ -122,6 +125,7 @@ data TCError = ErVar Id
              | ErApp1 Term Term
              | ErApp2 Term
              | ErTApp Term
+             | ErConstr Type
              deriving (Eq)
 
 -- For pretty printing errors
@@ -132,6 +136,7 @@ instance Show TCError where
                                    show trm1, "."]
   show (ErApp2 trm) = concat [show trm, " must be an abstraction."]
   show (ErTApp trm) = concat [show trm, " must be a type abstraction."]
+  show (ErConstr ty) = concat [show ty, " must be a variant type."]
 
 -- Extract id from a binding
 idFromBinding :: Binding -> Id
@@ -176,11 +181,6 @@ typeCheck (TmTApp tm ty) ctx =
      case ty' of
        (TyTAbs i ty'') -> Right $ subType i ty ty'' freshTyVars
        _                -> Left $ ErTApp tm
--- typeCheck (TmLet [] tm) ctx = typeCheck tm ctx
--- typeCheck (TmLet ((i,tm):bs) tm') ctx =
-  -- do ty <- typeCheck tm ctx
-     -- ty' <- typeCheck (TmLet bs tm') ((TmBind i ty):ctx)
-     -- return ty'
 typeCheck (TmLet itms tm) ctx =
   let itms' = sequence $ map (\(i,t) -> typeCheck t ctx) itms
       in case itms' of
@@ -188,6 +188,11 @@ typeCheck (TmLet itms tm) ctx =
            (Right tys) -> typeCheck tm (ctx' ++ ctx)
                           where ctx' = zipWith (\x y -> TmBind (fst x) y) itms tys
            (Left e) -> Left e
+typeCheck (TmConstr c tms ty) ctx =
+  do tms' <- sequence $ map (\tm -> typeCheck tm ctx) tms
+     case ty of
+       (TyCase _) -> Right ty
+       otherwise  -> Left $ ErConstr ty
 
 
 {- =============================== Evaluation  =================================-}
