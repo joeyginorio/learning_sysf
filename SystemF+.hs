@@ -193,13 +193,23 @@ typeCheck (TmConstr c tms ty) ctx =
 typeCheck (TmCase tm tmtms) ctx =
   do ty <- typeCheck tm ctx
      tm1s <- sequence $ map (\tm -> typeCheck tm ctx) ((fst . unzip) tmtms)
-     tm2s <- sequence $ map (\tm -> typeCheck tm ctx) ((snd . unzip) tmtms)
+     let ctx1s = map cToContext ((fst . unzip) tmtms)
+     let ctx1tm2s = zip ctx1s ((snd . unzip) tmtms)
+     tm2s <- sequence $ map (\(ctx1,tm2) -> typeCheck tm2 (ctx ++ ctx1)) ctx1tm2s
      let alleq = all (\x -> x == (tm2s !! 0)) tm2s
      if not alleq then Left $ ErCase1 else
        case ty of
          (TyCase ctys)
            | checkMatch ctys tmtms -> Right (tm2s !! 0)
            | otherwise             -> Left $ ErCase2 tm
+
+cToContext :: Term -> Context
+cToContext (TmConstr c tms (TyCase ctys)) =
+  let tys = snd ((filter (\x -> fst x == c) ctys) !! 0)
+      tmtys = zip tms tys
+      in [TmBind i ty | ((TmVar i),ty) <- tmtys]
+cToContext _ = []
+
 
 -- Given a TyCase and TmCase, checks if you have a complete pattern match
 checkMatch :: [(Constr, [Type])] -> [(Term, Term)] -> Bool
