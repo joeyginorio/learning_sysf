@@ -108,8 +108,10 @@ data TCError = ErVar Id
              | ErApp1 Term Term
              | ErApp2 Term
              | ErTApp Term
-             | ErConstr Type
-             | ErCase1 Type
+             | ErConstr1 Type
+             | ErConstr2 Constr
+             | ErConstr3 Constr Type
+             | ErCase1
              | ErCase2 Term
              deriving (Eq)
 
@@ -121,9 +123,11 @@ instance Show TCError where
                                    show trm1, "."]
   show (ErApp2 trm) = concat [show trm, " must be an abstraction."]
   show (ErTApp trm) = concat [show trm, " must be a type abstraction."]
-  show (ErConstr ty) = concat [show ty, " must be a variant type."]
-  show (ErCase1 ty) = concat ["Outputs of pattern match must match type ",
-                              show ty, "."]
+  show (ErConstr1 ty) = concat [show ty, " must be a variant type."]
+  show (ErConstr2 c) = concat [show c, " has arguments of wrong type."]
+  show (ErConstr3 c ty) = concat [show c, " is not a valid constructor for type ",
+                                 show ty, "."]
+  show (ErCase1) = concat ["Outputs of pattern match must match type."]
   show (ErCase2 tm) = concat ["Incomplete pattern match for ", show tm, "."]
 
 -- Extract id from a binding
@@ -177,16 +181,21 @@ typeCheck (TmLet itms tm) ctx =
                           where ctx' = zipWith (\x y -> TmBind (fst x) y) itms tys
            (Left e) -> Left e
 typeCheck (TmConstr c tms ty) ctx =
-  do tms' <- sequence $ map (\tm -> typeCheck tm ctx) tms
+  do tys <- sequence $ map (\tm -> typeCheck tm ctx) tms
+     let getArgTys c' ctys' = filter (\x -> fst x == c') ctys'
      case ty of
-       (TyCase _) -> Right ty
-       otherwise  -> Left $ ErConstr ty
+       (TyCase ctys) -> case getArgTys c ctys of
+                          ((_,tys'):[])
+                            | tys == tys' -> Right ty
+                            | otherwise   -> Left $ ErConstr2 c
+                          [] -> Left $ ErConstr3 c ty
+       otherwise  -> Left $ ErConstr1 ty
 typeCheck (TmCase tm tmtms) ctx =
   do ty <- typeCheck tm ctx
      tm1s <- sequence $ map (\tm -> typeCheck tm ctx) ((fst . unzip) tmtms)
      tm2s <- sequence $ map (\tm -> typeCheck tm ctx) ((snd . unzip) tmtms)
      let alleq = all (\x -> x == (tm2s !! 0)) tm2s
-     if not alleq then Left $ ErCase1 ty else
+     if not alleq then Left $ ErCase1 else
        case ty of
          (TyCase ctys)
            | checkMatch ctys tmtms -> Right (tm2s !! 0)
