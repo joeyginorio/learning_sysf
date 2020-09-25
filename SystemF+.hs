@@ -10,7 +10,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 
 
-{- ================= Syntax of Terms & Types & Patterns ======================-}
+{- ========================= Syntax of Terms & Types =========================-}
 type Id = String
 type Constr = String
 
@@ -25,7 +25,7 @@ data Term = TmUnit
           | TmTApp Term Type
           | TmLet [(Id,Term)] Term
           | TmConstr Constr [Term] Type
-          | TmCase Term [(Pattern, Term)]
+          | TmCase Term [(Term, Term)]
           deriving (Eq)
 
 -- For pretty printing terms
@@ -49,8 +49,8 @@ showTm (TmLet bs tm) = text "let " <+> (nest 4 $ showTmLet bs <+> line <+>
                        text "in " <+> showTm tm)
 showTm (TmConstr c tms ty) = text c <+> text " " <+> sepby " " (map showTm tms)
                              <+> text " as " <+> showTy ty
-showTm (TmCase t ps) = text "case " <+> showTm t <+> text " of" <+>
-                       (nest 3 $ line <+> showTmCase ps)
+showTm (TmCase tm tmtms) = text "case " <+> showTm tm <+> text " of" <+>
+                           (nest 3 $ line <+> showTmCase tmtms)
 
 showTmLet :: [(Id,Term)] -> Doc
 showTmLet [] = nil
@@ -58,11 +58,10 @@ showTmLet ((i,tm):[]) = text i <+> text " = " <+> showTm tm
 showTmLet ((i,tm):bs) = text i <+> text " = " <+> showTm tm <+> line <+>
                         showTmLet bs
 
-showTmCase :: [(Pattern, Term)] -> Doc
+showTmCase :: [(Term, Term)] -> Doc
 showTmCase [] = nil
-showTmCase ((p,t):pts) = showPn p <+> text " -> " <+> showTm t <+> line <+>
-                         showTmCase pts
-
+showTmCase ((tm1,tm2):tms) = showTm tm1 <+> text " -> " <+> showTm tm2 <+> line <+>
+                             showTmCase tms
 
 -- Syntax of Types
 data Type = TyUnit
@@ -94,22 +93,6 @@ showTyCase ((c,ts):cts) = parens (text c <+> text ":" <+> ts') <+> text "+" <+>
                           showTyCase cts
                           where ts' = sepby "*" (map showTy ts)
 
--- Syntax of Patterns
-data Pattern = PnVar Id
-             | PnConstr Constr [Pattern]
-             deriving (Eq)
-
--- For pretty printing patterns
-instance Show Pattern where
-  show p = layout $ showPn p
-
--- Pretty print patterns
-showPn :: Pattern -> Doc
-showPn (PnVar i) = text i
-showPn (PnConstr c []) = nil
-showPn (PnConstr c (p:ps)) = text c <+> text " " <+> showPn p <+>
-                            showPn (PnConstr c ps)
-
 
 {- =============================== Typing  =================================-}
 
@@ -126,6 +109,8 @@ data TCError = ErVar Id
              | ErApp2 Term
              | ErTApp Term
              | ErConstr Type
+             | ErCase1 Type
+             | ErCase2 Term
              deriving (Eq)
 
 -- For pretty printing errors
@@ -137,6 +122,9 @@ instance Show TCError where
   show (ErApp2 trm) = concat [show trm, " must be an abstraction."]
   show (ErTApp trm) = concat [show trm, " must be a type abstraction."]
   show (ErConstr ty) = concat [show ty, " must be a variant type."]
+  show (ErCase1 ty) = concat ["Outputs of pattern match must match type ",
+                              show ty, "."]
+  show (ErCase2 tm) = concat ["Incomplete pattern match for ", show tm, "."]
 
 -- Extract id from a binding
 idFromBinding :: Binding -> Id
@@ -193,6 +181,26 @@ typeCheck (TmConstr c tms ty) ctx =
      case ty of
        (TyCase _) -> Right ty
        otherwise  -> Left $ ErConstr ty
+typeCheck (TmCase tm tmtms) ctx =
+  do ty <- typeCheck tm ctx
+     tm1s <- sequence $ map (\tm -> typeCheck tm ctx) ((fst . unzip) tmtms)
+     tm2s <- sequence $ map (\tm -> typeCheck tm ctx) ((snd . unzip) tmtms)
+     let alleq = all (\x -> x == (tm2s !! 0)) tm2s
+     if not alleq then Left $ ErCase1 ty else
+       case ty of
+         (TyCase ctys)
+           | checkMatch ctys tmtms -> Right (tm2s !! 0)
+           | otherwise             -> Left $ ErCase2 tm
+
+-- Given a TyCase and TmCase, checks if you have a complete pattern match
+checkMatch :: [(Constr, [Type])] -> [(Term, Term)] -> Bool
+checkMatch [] [] = True
+checkMatch [] tmtms = False
+checkMatch ctys [] = False
+checkMatch ((c,tys):ctys) (((TmConstr c' _ _),tm):tmtms) =
+  if c == c' then True && checkMatch ctys tmtms
+  else False
+checkMatch ((c,tys):ctys) ((tm1,tm2):tmtms) = False
 
 
 {- =============================== Evaluation  =================================-}
