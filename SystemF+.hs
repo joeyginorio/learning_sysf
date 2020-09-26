@@ -111,10 +111,9 @@ data TCError = ErVar Id
              | ErConstr1 Type
              | ErConstr2 Constr
              | ErConstr3 Constr Type
-             | ErConstr4
              | ErCase1
              | ErCase2 Term
-             | ErCase3 Term
+             | ErCase3
              deriving (Eq)
 
 -- For pretty printing errors
@@ -129,10 +128,9 @@ instance Show TCError where
   show (ErConstr2 c) = concat [show c, " has arguments of wrong type."]
   show (ErConstr3 c ty) = concat [show c, " is not a valid constructor for type ",
                                  show ty, "."]
-  show (ErConstr4) = concat ["All arguments to constructors must be variables."]
   show (ErCase1) = concat ["Outputs of pattern match must match type."]
   show (ErCase2 tm) = concat ["Incomplete pattern match for ", show tm, "."]
-  show (ErCase3 tm) = concat [show tm, " is not a variable."]
+  show (ErCase3) = concat ["Arguments to constructors must be variables."]
 
 -- Extract id from a binding
 idFromBinding :: Binding -> Id
@@ -187,17 +185,14 @@ typeCheck (TmLet itms tm) ctx =
 typeCheck (TmConstr c tms ty) ctx =
   do tys <- sequence $ map (\tm -> typeCheck tm ctx) tms
      let getArgTys c' ctys' = filter (\x -> fst x == c') ctys'
-     let isVar = (\x -> case x of (TmVar _) -> True; otherwise -> False)
-     let allVar = all isVar tms
-     if not allVar then Left ErConstr4 else
-       case ty of
-         (TyCase ctys) -> case getArgTys c ctys of
-                            ((_,tys'):[])
-                              | tys == tys' -> Right ty
-                              | otherwise   -> Left $ ErConstr2 c
-                            [] -> Left $ ErConstr3 c ty
-         otherwise  -> Left $ ErConstr1 ty
-typeCheck (TmCase tm@(TmVar _) tmtms) ctx =
+     case ty of
+       (TyCase ctys) -> case getArgTys c ctys of
+                          ((_,tys'):[])
+                            | tys == tys' -> Right ty
+                            | otherwise   -> Left $ ErConstr2 c
+                          [] -> Left $ ErConstr3 c ty
+       otherwise  -> Left $ ErConstr1 ty
+typeCheck (TmCase tm tmtms) ctx =
   do ty <- typeCheck tm ctx
      tm1s <- sequence $ map (\tm -> typeCheck tm ctx) ((fst . unzip) tmtms)
      let ctx1s = map cToContext ((fst . unzip) tmtms)
@@ -205,11 +200,11 @@ typeCheck (TmCase tm@(TmVar _) tmtms) ctx =
      tm2s <- sequence $ map (\(ctx1,tm2) -> typeCheck tm2 (ctx ++ ctx1)) ctx1tm2s
      let alleq = all (\x -> x == (tm2s !! 0)) tm2s
      if not alleq then Left $ ErCase1 else
-       case ty of
-         (TyCase ctys)
-           | checkMatch ctys tmtms -> Right (tm2s !! 0)
-           | otherwise             -> Left $ ErCase2 tm
-typeCheck (TmCase tm tmtms) ctx = Left $ ErCase3 tm
+       if not (allVarsC . fst . unzip $ tmtms) then Left $ ErCase3 else
+         case ty of
+           (TyCase ctys)
+             | checkMatch ctys tmtms -> Right (tm2s !! 0)
+             | otherwise             -> Left $ ErCase2 tm
 
 cToContext :: Term -> Context
 cToContext (TmConstr c tms (TyCase ctys)) =
@@ -218,6 +213,13 @@ cToContext (TmConstr c tms (TyCase ctys)) =
       in [TmBind i ty | ((TmVar i),ty) <- tmtys]
 cToContext _ = []
 
+allVarsC :: [Term] -> Bool
+allVarsC [] = True
+allVarsC ((TmConstr _ tms _):cs) = allVars tms && allVarsC cs
+allVarsC (c:cs) = False
+
+allVars :: [Term] -> Bool
+allVars tms = all (\x -> case x of (TmVar _) -> True; otherwise -> False) tms
 
 -- Given a TyCase and TmCase, checks if you have a complete pattern match
 checkMatch :: [(Constr, [Type])] -> [(Term, Term)] -> Bool
