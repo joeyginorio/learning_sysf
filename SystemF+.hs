@@ -275,6 +275,9 @@ freeTyVar (TyBool) = Set.empty
 freeTyVar (TyVar i) = Set.singleton i
 freeTyVar (TyAbs typ1 typ2) = Set.union (freeTyVar typ1) (freeTyVar typ2)
 freeTyVar (TyTAbs i typ) = (freeTyVar typ) Set.\\ (Set.singleton i)
+freeTyVar (TyCase ctys) = foldr Set.union Set.empty fvss
+  where tyss = (snd . unzip $ ctys)
+        fvss = [foldr Set.union Set.empty (map freeTyVar tys) | tys <- tyss]
 
 -- Replace all instances of a variable with new identifier
 replaceTmVar :: Id -> Id -> Term -> Term
