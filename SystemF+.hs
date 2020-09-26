@@ -111,8 +111,10 @@ data TCError = ErVar Id
              | ErConstr1 Type
              | ErConstr2 Constr
              | ErConstr3 Constr Type
+             | ErConstr4
              | ErCase1
              | ErCase2 Term
+             | ErCase3 Term
              deriving (Eq)
 
 -- For pretty printing errors
@@ -127,8 +129,10 @@ instance Show TCError where
   show (ErConstr2 c) = concat [show c, " has arguments of wrong type."]
   show (ErConstr3 c ty) = concat [show c, " is not a valid constructor for type ",
                                  show ty, "."]
+  show (ErConstr4) = concat ["All arguments to constructors must be variables."]
   show (ErCase1) = concat ["Outputs of pattern match must match type."]
   show (ErCase2 tm) = concat ["Incomplete pattern match for ", show tm, "."]
+  show (ErCase3 tm) = concat [show tm, " is not a variable."]
 
 -- Extract id from a binding
 idFromBinding :: Binding -> Id
@@ -183,14 +187,17 @@ typeCheck (TmLet itms tm) ctx =
 typeCheck (TmConstr c tms ty) ctx =
   do tys <- sequence $ map (\tm -> typeCheck tm ctx) tms
      let getArgTys c' ctys' = filter (\x -> fst x == c') ctys'
-     case ty of
-       (TyCase ctys) -> case getArgTys c ctys of
-                          ((_,tys'):[])
-                            | tys == tys' -> Right ty
-                            | otherwise   -> Left $ ErConstr2 c
-                          [] -> Left $ ErConstr3 c ty
-       otherwise  -> Left $ ErConstr1 ty
-typeCheck (TmCase tm tmtms) ctx =
+     let isVar = (\x -> case x of (TmVar _) -> True; otherwise -> False)
+     let allVar = all isVar tms
+     if not allVar then Left ErConstr4 else
+       case ty of
+         (TyCase ctys) -> case getArgTys c ctys of
+                            ((_,tys'):[])
+                              | tys == tys' -> Right ty
+                              | otherwise   -> Left $ ErConstr2 c
+                            [] -> Left $ ErConstr3 c ty
+         otherwise  -> Left $ ErConstr1 ty
+typeCheck (TmCase tm@(TmVar _) tmtms) ctx =
   do ty <- typeCheck tm ctx
      tm1s <- sequence $ map (\tm -> typeCheck tm ctx) ((fst . unzip) tmtms)
      let ctx1s = map cToContext ((fst . unzip) tmtms)
@@ -202,6 +209,7 @@ typeCheck (TmCase tm tmtms) ctx =
          (TyCase ctys)
            | checkMatch ctys tmtms -> Right (tm2s !! 0)
            | otherwise             -> Left $ ErCase2 tm
+typeCheck (TmCase tm tmtms) ctx = Left $ ErCase3 tm
 
 cToContext :: Term -> Context
 cToContext (TmConstr c tms (TyCase ctys)) =
