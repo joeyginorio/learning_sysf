@@ -287,16 +287,22 @@ replaceTmVar _ _ (TmFalse) = TmFalse
 replaceTmVar x y (TmVar i)
   | i == x    = TmVar y
   | otherwise = TmVar i
-replaceTmVar x y (TmAbs i typ trm)
-  | i == x    = TmAbs y typ (replaceTmVar x y trm)
-  | otherwise = TmAbs i typ (replaceTmVar x y trm)
-replaceTmVar x y (TmApp trm1 trm2) = TmApp trm1' trm2'
-  where trm1' = replaceTmVar x y trm1
-        trm2' = replaceTmVar x y trm2
-replaceTmVar x y (TmTAbs i trm) = TmTAbs i trm'
-  where trm' = replaceTmVar x y trm
-replaceTmVar x y (TmTApp trm typ) = TmTApp trm' typ
-  where trm' = replaceTmVar x y trm
+replaceTmVar x y (TmAbs i ty tm)
+  | i == x    = TmAbs y ty (replaceTmVar x y tm)
+  | otherwise = TmAbs i ty (replaceTmVar x y tm)
+replaceTmVar x y (TmApp tm1 tm2) = TmApp tm1' tm2'
+  where tm1' = replaceTmVar x y tm1
+        tm2' = replaceTmVar x y tm2
+replaceTmVar x y (TmTAbs i tm) = TmTAbs i tm'
+  where tm' = replaceTmVar x y tm
+replaceTmVar x y (TmTApp tm ty) = TmTApp tm' ty
+  where tm' = replaceTmVar x y tm
+replaceTmVar x y (TmConstr c tms ty) = TmConstr c tms' ty
+  where tms' = map (replaceTmVar x y) tms
+replaceTmVar x y (TmCase tm tmtms) = TmCase tm' tmtms'
+  where tm' = replaceTmVar x y tm
+        replaceTmTms = (\(s,t) -> (replaceTmVar x y s, replaceTmVar x y t))
+        tmtms' = map replaceTmTms tmtms
 
 -- Replace all instances of a type variable with new identifier
 replaceTyVar :: Id -> Id -> Type -> Type
@@ -311,6 +317,9 @@ replaceTyVar x y (TyAbs typ1 typ2) = TyAbs typ1' typ2'
 replaceTyVar x y (TyTAbs i typ)
   | i == x     = TyTAbs y (replaceTyVar x y typ)
   | otherwise  = TyTAbs i (replaceTyVar x y typ)
+replaceTyVar x y (TyCase ctys) = TyCase ctys'
+  where replaceCTys = (\(c,tys) -> (c, map (replaceTyVar x y) tys))
+        ctys' = map replaceCTys ctys
 
 -- Capture-avoiding substitution of terms
 subTerm :: Id -> Term -> Term -> [Id] -> Term
