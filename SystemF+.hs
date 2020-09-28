@@ -297,6 +297,12 @@ replaceTmVar x y (TmTAbs i tm) = TmTAbs i tm'
   where tm' = replaceTmVar x y tm
 replaceTmVar x y (TmTApp tm ty) = TmTApp tm' ty
   where tm' = replaceTmVar x y tm
+replaceTmVar x y (TmLet itms tm) = TmLet itms' tm'
+  where tm' = replaceTmVar x y tm
+        itms' = map
+                (\(i,t) -> if i == x then (y,replaceTmVar x y t)
+                          else (i,replaceTmVar x y t))
+                itms
 replaceTmVar x y (TmConstr c tms ty) = TmConstr c tms' ty
   where tms' = map (replaceTmVar x y) tms
 replaceTmVar x y (TmCase tm tmtms) = TmCase tm' tmtms'
