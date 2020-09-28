@@ -396,13 +396,27 @@ eval :: Term -> Env -> Term
 eval (TmUnit) _ = TmUnit
 eval (TmTrue) _ = TmTrue
 eval (TmFalse) _ = TmFalse
-eval trm@(TmVar _) _ = trm
-eval trm@(TmAbs _ _ _) _ = trm
-eval (TmApp (TmAbs i _ trm1) trm2) (_,fvs) = subTerm i trm2 trm1 fvs
-eval (TmApp trm1 trm2) env = eval (TmApp trm1' trm2') env
-  where trm1' = eval trm1 env
-        trm2' = eval trm2 env
-eval trm@(TmTAbs _ _) _ = trm
-eval (TmTApp (TmTAbs i trm) typ) (_,fvs) = subTypeTerm i typ trm fvs
-eval (TmTApp trm typ) env = eval (TmTApp trm' typ) env
-  where trm' = eval trm env
+eval tm@(TmVar _) _ = tm
+eval tm@(TmAbs _ _ _) _ = tm
+eval (TmApp (TmAbs i _ tm1) tm2) (_,fvs) = subTerm i tm2 tm1 fvs
+eval (TmApp tm1 tm2) env = eval (TmApp tm1' tm2') env
+  where tm1' = eval tm1 env
+        tm2' = eval tm2 env
+eval tm@(TmTAbs _ _) _ = tm
+eval (TmTApp (TmTAbs i tm) ty) (_,fvs) = subTypeTerm i ty tm fvs
+eval (TmTApp tm ty) env = eval (TmTApp tm' ty) env
+  where tm' = eval tm env
+eval (TmConstr c tms ty) env = TmConstr c tms' ty
+  where tms' = map (\tm -> eval tm env) tms
+eval (TmCase (TmConstr c tms ty) tmtms) (_,fvs) =
+  let (TmConstr _ tms' _,tm2) = getMatch c tmtms
+      ids = [i | (TmVar i) <- tms']
+      idtms = zip ids tms
+      in subTerms idtms tm2 fvs
+
+getMatch :: Constr -> [(Term,Term)] -> (Term,Term)
+getMatch c tmtms = [m | m@((TmConstr c' _ _),_) <- tmtms, c == c'] !! 0
+
+subTerms :: [(Id,Term)] -> Term -> [Id] -> Term
+subTerms [] tm _ = tm
+subTerms ((i,tm'):itms) tm fvs = subTerms itms (subTerm i tm' tm fvs) fvs
