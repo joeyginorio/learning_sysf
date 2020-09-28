@@ -326,54 +326,70 @@ subTerm :: Id -> Term -> Term -> [Id] -> Term
 subTerm _ _ (TmUnit) _ = TmUnit
 subTerm _ _ (TmTrue) _ = TmTrue
 subTerm _ _ (TmFalse) _ = TmFalse
-subTerm x trm (TmVar i) _
-  | x == i    = trm
+subTerm x tm (TmVar i) _
+  | x == i    = tm
   | otherwise = (TmVar i)
-subTerm x trm t@(TmAbs i typ trm') fvs@(i':is)
+subTerm x tm t@(TmAbs i ty tm') fvs@(i':is)
   | x == i                               = t
-  | x /= i && (not (Set.member i fvTrm)) = TmAbs i typ (subTerm x trm trm' fvs)
-  | x /= i && (Set.member i fvTrm)       = (subTerm x trm rtrm is)
-  where fvTrm = freeTmVar trm
-        rtrm  = replaceTmVar i i' t
-subTerm x trm (TmApp trm1 trm2) fvs = TmApp trm1' trm2'
-  where trm1' = subTerm x trm trm1 fvs
-        trm2' = subTerm x trm trm2 fvs
-subTerm x trm (TmTAbs i trm') fvs = TmTAbs i (subTerm x trm trm' fvs)
-subTerm x trm (TmTApp trm' typ) fvs = TmTApp (subTerm x trm trm' fvs) typ
+  | x /= i && (not (Set.member i fvTm)) = TmAbs i ty (subTerm x tm tm' fvs)
+  | x /= i && (Set.member i fvTm)       = (subTerm x tm rtm is)
+  where fvTm = freeTmVar tm
+        rtm  = replaceTmVar i i' t
+subTerm x tm (TmApp tm1 tm2) fvs = TmApp tm1' tm2'
+  where tm1' = subTerm x tm tm1 fvs
+        tm2' = subTerm x tm tm2 fvs
+subTerm x tm (TmTAbs i tm') fvs = TmTAbs i (subTerm x tm tm' fvs)
+subTerm x tm (TmTApp tm' ty) fvs = TmTApp (subTerm x tm tm' fvs) ty
+subTerm x tm (TmConstr c tms ty) fvs = TmConstr c tms' ty
+  where tms' = map (\t -> subTerm x tm t fvs) tms
+subTerm x tm (TmCase tm' tmtms) fvs = TmCase tm'' tmtms'
+  where tm'' = subTerm x tm tm' fvs
+        subTmTms = (\(s,t) -> (subTerm x tm s fvs, subTerm x tm t fvs))
+        tmtms' = map subTmTms tmtms
 
 -- Capture-avoiding substitution of types
 subType :: Id -> Type -> Type -> [Id] -> Type
 subType _ _ (TyUnit) _ = TyUnit
 subType _ _ (TyBool) _ = TyBool
-subType x typ (TyVar i) _
-  | x == i    = typ
+subType x ty (TyVar i) _
+  | x == i    = ty
   | otherwise = (TyVar i)
-subType x typ (TyAbs typ1 typ2) fvs = TyAbs typ1' typ2'
-  where typ1' = subType x typ typ1 fvs
-        typ2' = subType x typ typ2 fvs
-subType x typ t@(TyTAbs i typ') fvs@(i':is)
+subType x ty (TyAbs ty1 ty2) fvs = TyAbs ty1' ty2'
+  where ty1' = subType x ty ty1 fvs
+        ty2' = subType x ty ty2 fvs
+subType x ty t@(TyTAbs i ty') fvs@(i':is)
   | x == i                               = t
-  | x /= i && (not (Set.member i fvTyp)) = TyTAbs i (subType x typ typ' fvs)
-  | x /= i && (Set.member i fvTyp)       = TyTAbs i' (subType x typ rtyp is)
-  where fvTyp = freeTyVar typ
-        rtyp = replaceTyVar i i' typ'
+  | x /= i && (not (Set.member i fvTy)) = TyTAbs i (subType x ty ty' fvs)
+  | x /= i && (Set.member i fvTy)       = TyTAbs i' (subType x ty rty is)
+  where fvTy = freeTyVar ty
+        rty = replaceTyVar i i' ty'
+subType x ty (TyCase ctys) fvs = TyCase ctys'
+  where subCTys = (\(c,tys) -> (c, map (\t -> subType x ty t fvs) tys))
+        ctys' = map subCTys ctys
 
 -- Capture-avoiding substitution of types in terms
 subTypeTerm :: Id -> Type -> Term -> [Id] -> Term
 subTypeTerm _ _ (TmUnit) _ = TmUnit
 subTypeTerm _ _ (TmTrue) _ = TmTrue
 subTypeTerm _ _ (TmFalse) _ = TmFalse
-subTypeTerm _ _ trm@(TmVar _) _ = trm
-subTypeTerm x typ (TmAbs i typ' trm) fvs = (TmAbs i typ'' trm')
-  where typ'' = subType x typ typ' fvs
-        trm'  = subTypeTerm x typ trm fvs
-subTypeTerm x typ (TmApp trm1 trm2) fvs = (TmApp trm1' trm2')
-  where trm1' = subTypeTerm x typ trm1 fvs
-        trm2' = subTypeTerm x typ trm2 fvs
-subTypeTerm x typ t@(TmTAbs i trm) fvs
+subTypeTerm _ _ tm@(TmVar _) _ = tm
+subTypeTerm x ty (TmAbs i ty' tm) fvs = (TmAbs i ty'' tm')
+  where ty'' = subType x ty ty' fvs
+        tm'  = subTypeTerm x ty tm fvs
+subTypeTerm x ty (TmApp tm1 tm2) fvs = (TmApp tm1' tm2')
+  where tm1' = subTypeTerm x ty tm1 fvs
+        tm2' = subTypeTerm x ty tm2 fvs
+subTypeTerm x ty t@(TmTAbs i tm) fvs
   | x == i = t
-  | x /= i = TmTAbs i trm'
-  where trm' = subTypeTerm x typ trm fvs
+  | x /= i = TmTAbs i tm'
+  where tm' = subTypeTerm x ty tm fvs
+subTypeTerm x ty (TmConstr c tms ty') fvs = TmConstr c tms' ty''
+  where tms' = map (\t -> subTypeTerm x ty t fvs) tms
+        ty'' = subType x ty ty' fvs
+subTypeTerm x ty (TmCase tm tmtms) fvs = TmCase tm' tmtms'
+  where tm' = subTypeTerm x ty tm fvs
+        subTyTmTms = (\(s,t) -> (subTypeTerm x ty s fvs, subTypeTerm x ty t fvs))
+        tmtms' = map subTyTmTms tmtms
 
 -- Evaluate terms, assuming well-typed
 eval :: Term -> Env -> Term
