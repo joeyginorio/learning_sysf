@@ -254,19 +254,19 @@ freeTmVar (TmUnit) = Set.empty
 freeTmVar (TmTrue) = Set.empty
 freeTmVar (TmFalse) = Set.empty
 freeTmVar (TmVar i) = Set.singleton i
-freeTmVar (TmAbs i _ trm) = (freeTmVar trm) Set.\\ (Set.singleton i)
-freeTmVar (TmApp trm1 trm2) = Set.union (freeTmVar trm1) (freeTmVar trm2)
-freeTmVar (TmTAbs _ trm) = (freeTmVar trm)
-freeTmVar (TmTApp trm _) = (freeTmVar trm)
+freeTmVar (TmAbs i _ tm) = (freeTmVar tm) Set.\\ (Set.singleton i)
+freeTmVar (TmApp tm1 tm2) = Set.union (freeTmVar tm1) (freeTmVar tm2)
+freeTmVar (TmTAbs _ tm) = (freeTmVar tm)
+freeTmVar (TmTApp tm _) = (freeTmVar tm)
 freeTmVar (TmLet itms tm) = Set.union fvs1 fvs2
-  where fvs1 = foldr Set.union Set.empty (map freeTmVar ((snd . unzip) itms))
+  where fvs1 = foldr Set.union Set.empty fvs1'
+        fvs1' = map (\(i,t) -> (freeTmVar t) Set.\\ (Set.singleton i)) itms
         fvs2 = freeTmVar tm
 freeTmVar (TmConstr _ tms _) = foldr Set.union Set.empty (map freeTmVar tms)
 freeTmVar (TmCase tm tmtms) = Set.union fvs1 fvs2
   where fvs1 = freeTmVar tm
-        fvs2 = Set.union fvs3 fvs4
-        fvs3 = foldr Set.union Set.empty (map freeTmVar ((fst . unzip) tmtms))
-        fvs4 = foldr Set.union Set.empty (map freeTmVar ((snd . unzip) tmtms))
+        fvs2 = foldr Set.union Set.empty fvs2'
+        fvs2' = map (\(tm1,tm2) -> (freeTmVar tm2) Set.\\ (freeTmVar tm1)) tmtms
 
 -- Returns the free variables in a type
 freeTyVar :: Type -> Set.Set Id
