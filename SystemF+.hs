@@ -422,6 +422,12 @@ subTypeTerm x ty t@(TmTAbs i tm) fvs
   | x == i = t
   | x /= i = TmTAbs i tm'
   where tm' = subTypeTerm x ty tm fvs
+subTypeTerm x ty (TmTApp tm ty') fvs = (TmTApp tm' ty'')
+  where tm' = subTypeTerm x ty tm fvs
+        ty'' = subType x ty ty' fvs
+subTypeTerm x ty (TmLet itms tm) fvs = TmLet itms' tm'
+  where itms' = map (\(i,t) -> (i,subTypeTerm x ty t fvs)) itms
+        tm' = subTypeTerm x ty tm fvs
 subTypeTerm x ty (TmConstr c tms ty') fvs = TmConstr c tms' ty''
   where tms' = map (\t -> subTypeTerm x ty t fvs) tms
         ty'' = subType x ty ty' fvs
@@ -445,6 +451,8 @@ eval tm@(TmTAbs _ _) _ = tm
 eval (TmTApp (TmTAbs i tm) ty) (_,fvs) = subTypeTerm i ty tm fvs
 eval (TmTApp tm ty) env = eval (TmTApp tm' ty) env
   where tm' = eval tm env
+eval (TmLet itms tm) e@(_,fvs) = evalLet itms' tm fvs
+  where itms' = map (\(i,t) -> (i, eval t e)) itms
 eval (TmConstr c tms ty) env = TmConstr c tms' ty
   where tms' = map (\tm -> eval tm env) tms
 eval (TmCase (TmConstr c tms ty) tmtms) (_,fvs) =
@@ -452,6 +460,10 @@ eval (TmCase (TmConstr c tms ty) tmtms) (_,fvs) =
       ids = [i | (TmVar i) <- tms']
       idtms = zip ids tms
       in subTerms idtms tm2 fvs
+
+evalLet :: [(Id,Term)] -> Term -> [Id] -> Term
+evalLet [] tm _ = tm
+evalLet ((i,t):xs) tm fvs = evalLet xs (subTerm i t tm fvs) fvs
 
 getMatch :: Constr -> [(Term,Term)] -> (Term,Term)
 getMatch c tmtms = [m | m@((TmConstr c' _ _),_) <- tmtms, c == c'] !! 0
