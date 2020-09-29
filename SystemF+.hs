@@ -350,8 +350,28 @@ subTerm x tm (TmConstr c tms ty) fvs = TmConstr c tms' ty
   where tms' = map (\t -> subTerm x tm t fvs) tms
 subTerm x tm (TmCase tm' tmtms) fvs = TmCase tm'' tmtms'
   where tm'' = subTerm x tm tm' fvs
-        subTmTms = (\(s,t) -> (subTerm x tm s fvs, subTerm x tm t fvs))
-        tmtms' = map subTmTms tmtms
+        tmtms' = map (\t -> subMatch x tm t fvs) tmtms
+
+subMatch :: Id -> Term -> (Term, Term) -> [Id] -> (Term, Term)
+subMatch x tm (tm1@(TmConstr _ tms _), tm2) fvs =
+  let fvC = freeTmVar tm1
+      fvTm = freeTmVar tm
+      conflicts = Set.toList (Set.intersection fvC fvTm)
+      (tm1',tm2') = fixMatch conflicts (tm1,tm2) fvs
+      fvTm1 = freeTmVar tm1
+      rtm
+         | (Set.member x fvTm1) = (tm1,tm2)
+         | (not (Set.member x fvTm1))
+           && conflicts == [] = (tm1, subTerm x tm tm2 fvs)
+         | (not (Set.member x fvTm1))
+           && conflicts /= [] = (tm1', subTerm x tm tm2' fvs)
+      in rtm
+
+fixMatch :: [Id] -> (Term, Term) -> [Id] -> (Term, Term)
+fixMatch [] (tm1,tm2) _ = (tm1,tm2)
+fixMatch (x:xs) (tm1,tm2) (i:is) = fixMatch xs (replaceTmVar x i tm1,
+                                         replaceTmVar x i tm2) is
+
 
 -- Capture-avoiding substitution of types
 subType :: Id -> Type -> Type -> [Id] -> Type
