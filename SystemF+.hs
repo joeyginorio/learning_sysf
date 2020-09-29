@@ -346,6 +346,14 @@ subTerm x tm (TmApp tm1 tm2) fvs = TmApp tm1' tm2'
         tm2' = subTerm x tm tm2 fvs
 subTerm x tm (TmTAbs i tm') fvs = TmTAbs i (subTerm x tm tm' fvs)
 subTerm x tm (TmTApp tm' ty) fvs = TmTApp (subTerm x tm tm' fvs) ty
+subTerm x tm (TmLet itms tm') fvs =
+  let tms = (snd . unzip) itms
+      tms' = map (\t -> subTerm x tm t fvs) tms
+      fvIs = Set.fromList $ (fst . unzip) itms
+      fvTm = freeTmVar tm
+      conflicts = Set.toList (Set.intersection fvIs fvTm)
+      (fvIs',tm'') = fixLet conflicts (Set.toList fvIs,tm) fvs
+      in TmLet (zip fvIs' tms') tm''
 subTerm x tm (TmConstr c tms ty) fvs = TmConstr c tms' ty
   where tms' = map (\t -> subTerm x tm t fvs) tms
 subTerm x tm (TmCase tm' tmtms) fvs = TmCase tm'' tmtms'
@@ -372,6 +380,11 @@ fixMatch [] (tm1,tm2) _ = (tm1,tm2)
 fixMatch (x:xs) (tm1,tm2) (i:is) = fixMatch xs (replaceTmVar x i tm1,
                                          replaceTmVar x i tm2) is
 
+fixLet :: [Id] -> ([Id], Term) -> [Id] -> ([Id], Term)
+fixLet [] (fvIs, tm) _ = (fvIs, tm)
+fixLet (x:xs) (fvIs, tm) (i:is) = fixLet xs (fvIs',tm') is
+  where fvIs' = [if x == x' then i else x' | x' <- fvIs]
+        tm' = replaceTmVar x i tm
 
 -- Capture-avoiding substitution of types
 subType :: Id -> Type -> Type -> [Id] -> Type
