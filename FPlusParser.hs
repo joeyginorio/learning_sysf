@@ -109,6 +109,13 @@ tmLet = do symbol "let"
            t <- tm
            return $ TmLet itms t
 
+tmConstr :: Parser Term
+tmConstr = do c <- constructor
+              tms <- many (tmVar <|> tm)
+              symbol "as"
+              a <- ty
+              return $ TmConstr c tms a
+
 tmAtom :: Parser Term
 tmAtom = tmAbs <|> tmUnit <|> tmTrue <|> tmFalse <|> tmVar <|>
          parens tm
