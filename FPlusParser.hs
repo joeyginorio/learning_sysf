@@ -15,8 +15,12 @@ tydecl ::= identifier :: ty
 
 tmdecl ::= identifier params = tm
 
+ddecl ::= data identifier = [constructor [ty]]
+
 tm ::= lam id : ty . tm | tm tm | x | tt | ff | unit | (tm)
-ty ::= Bool | Unit | ty -> ty | (type)
+     | let [identifier = tm] in tm | constructor [tm] ty
+     | case identifier of [constructor [identifiers] -> tm]
+ty ::= Bool | Unit | ty -> ty | <(id : type) + (id : type)> | (type)
 
 Example Program:
 
@@ -67,7 +71,7 @@ ty = tyAtom `chainr1` tyAbsOp
 {-================================ PARSE TERMS ===============================-}
 
 keywords :: [String]
-keywords = ["let", "in", "lam"]
+keywords = ["let", "in", "lam", "data", "as", "case", "of"]
 
 tmUnit :: Parser Term
 tmUnit = do symbol "unit"
@@ -94,18 +98,20 @@ tmAbs = do  symbol "lam"
             t <- tm
             return $ TmAbs x a t
 
--- tmLet :: Parser Term
--- tmLet = do  symbol "let"
---             x <- identifier keywords
---             symbol "="
---             t1 <- tm
---             symbol "in"
---             t2 <- tm
---             return $ TmLet x t1 t2
+tmLet :: Parser Term
+tmLet = do symbol "let"
+           itms <- many (do  x <- identifier keywords
+                             symbol "="
+                             t <- tm
+                             line
+                             return (x,t))
+           symbol "in"
+           t <- tm
+           return $ TmLet itms t
 
 tmAtom :: Parser Term
 tmAtom = tmAbs <|> tmUnit <|> tmTrue <|> tmFalse <|> tmVar <|>
-          parens tm
+         parens tm
 
 tmAppOp :: Parser (Term -> Term -> Term)
 tmAppOp = return TmApp
