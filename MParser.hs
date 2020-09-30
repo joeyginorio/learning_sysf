@@ -91,17 +91,16 @@ string (c:cs) = do x <- char c
                    xs <- string cs
                    return (x:xs)
 
--- Use a parser many (zero or more) times
--- many :: Parser a -> Parser [a]
-
--- Use a parser some (one or more) times
--- some :: Parser a -> Parser [a]
-
 -- Parse identifiers, a lowercase character followed by alphanumerics
 ident :: Parser String
 ident = do c <- lower
            cs <- many alphanum
            return (c:cs)
+
+constr :: Parser String
+constr = do c <- upper
+            cs <- many alphanum
+            return (c:cs)
 
 -- Parse natural numbers
 nat :: Parser Int
@@ -144,6 +143,10 @@ identifier :: [String] -> Parser String
 identifier ks = do x <- token ident
                    if not (elem x ks) then return x
                    else empty
+
+-- Parse constructors
+constructor :: Parser String
+constructor = token constr
 
 -- Parse natural numbers (w/ token)
 natural :: Parser Int
