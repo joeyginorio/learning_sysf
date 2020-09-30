@@ -121,6 +121,10 @@ allSpace :: Parser ()
 allSpace = do many (sat isSpace)
               return ()
 
+line :: Parser ()
+line = do symbol "\n"
+          return ()
+
 -- Parse integers
 int :: Parser Int
 int = do char '-'
