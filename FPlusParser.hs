@@ -116,9 +116,21 @@ tmConstr = do c <- constructor
               a <- ty
               return $ TmConstr c tms a
 
+tmCase :: Parser Term
+tmCase = do symbol "case"
+            t <- tm
+            symbol "of"
+            symbol "\n" <|> (symbol "")
+            tmtms <- many (do t1 <- tm
+                              symbol "->"
+                              t2 <- tm
+                              (symbol ";" <|> symbol "\n" <|> symbol "")
+                              return (t1,t2))
+            return $ TmCase t tmtms
+
 tmAtom :: Parser Term
-tmAtom = tmAbs <|> tmUnit <|> tmTrue <|> tmFalse <|> tmVar <|>
-         parens tm
+tmAtom = tmLet <|> tmAbs <|> tmUnit <|> tmTrue <|> tmFalse <|> tmConstr <|>
+         tmVar <|> parens tm
 
 tmAppOp :: Parser (Term -> Term -> Term)
 tmAppOp = return TmApp
