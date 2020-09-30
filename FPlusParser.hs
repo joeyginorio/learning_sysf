@@ -129,8 +129,8 @@ tmCase = do symbol "case"
             return $ TmCase t tmtms
 
 tmAtom :: Parser Term
-tmAtom = tmLet <|> tmAbs <|> tmUnit <|> tmTrue <|> tmFalse <|> tmConstr <|>
-         tmVar <|> parens tm
+tmAtom = tmCase <|> tmLet <|> tmAbs <|> tmUnit <|> tmTrue <|> tmFalse <|>
+         tmConstr <|> tmVar <|> parens tm
 
 tmAppOp :: Parser (Term -> Term -> Term)
 tmAppOp = return TmApp
