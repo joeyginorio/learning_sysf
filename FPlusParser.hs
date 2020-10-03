@@ -62,7 +62,24 @@ tyAbsOp = do symbol "->"
              return TyAbs
 
 tyAtom :: Parser Type
-tyAtom = tyUnit <|> tyBool <|> parens ty
+tyAtom = tyUnit <|> tyBool <|> tyTAbs <|> tyVar <|> tyCase <|> parens ty
+
+tyVar :: Parser Type
+tyVar = do c <- constructor
+           return $ TyVar c
+
+tyTAbs :: Parser Type
+tyTAbs = do c <- constructor
+            symbol "."
+            t <- ty
+            return $ TyTAbs c t
+
+tyCase :: Parser Type
+tyCase = do ctys <- many (parens (do c <- constructor
+                                     symbol ":"
+                                     tys <- sepby ty (symbol "*")
+                                     return (c,tys)))
+            return $ TyCase ctys
 
 ty :: Parser Type
 ty = tyAtom `chainr1` tyAbsOp
