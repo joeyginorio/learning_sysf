@@ -41,7 +41,7 @@ import FPlus
 
 type Prog = [Decl]
 
-type Decl = (TyDecl, TmDecl)
+type Decl = Either (TyDecl, TmDecl) (DDecl, TyDecl, TmDecl)
 type TyDecl = (String, Type)
 type TmDecl = (String, [String], Term)
 type DDecl = (String, Type)
@@ -75,10 +75,10 @@ tyTAbs = do c <- constructor
             return $ TyTAbs c t
 
 tyCase :: Parser Type
-tyCase = do ctys <- many (parens (do c <- constructor
-                                     symbol ":"
-                                     tys <- sepby ty (symbol "*")
-                                     return (c,tys)))
+tyCase = do ctys <- sepby (parens (do c <- constructor
+                                      symbol ":"
+                                      tys <- sepby ty (symbol "*")
+                                      return (c,tys))) (symbol "+")
             return $ TyCase ctys
 
 ty :: Parser Type
@@ -157,26 +157,48 @@ tm = do tmAtom `chainl1` tmAppOp
 
 
 {-================================ PARSE DECLS ===============================-}
-tydecl :: Parser TyDecl
-tydecl = do allSpace
+tyDecl :: Parser TyDecl
+tyDecl = do allSpace
             f <- identifier keywords
             symbol "::"
             a <- ty
             return (f,a)
 
-tmdecl :: Parser TmDecl
-tmdecl = do allSpace
+tmDecl :: Parser TmDecl
+tmDecl = do allSpace
             f <- identifier keywords
             ps <- many (identifier keywords)
             symbol "="
             t <- tm
             return (f,ps,t)
 
-decl :: Parser Decl
-decl = do tyd <- tydecl
-          tmd <- tmdecl
-          return (tyd,tmd)
+dDecl :: Parser DDecl
+dDecl = do symbol "data"
+           d <- constructor
+           symbol "="
+           c1 <- constructor
+           tys1 <- many ty
+           ctys <- many (do symbol "\n" <|> (symbol "")
+                            symbol "|"
+                            c <- constructor
+                            tys <- many ty
+                            return (c,tys))
+           return (d, (TyCase ((c1,tys1):ctys)))
 
+
+tytmDecl :: Parser Decl
+tytmDecl = do tyd <- tyDecl
+              tmd <- tmDecl
+              return $ Left (tyd,tmd)
+
+dtytmDecl :: Parser Decl
+dtytmDecl = do dd <- dDecl
+               tyd <- tyDecl
+               tmd <- tmDecl
+               return $ Right (dd,tyd,tmd)
+
+decl :: Parser Decl
+decl = tytmDecl <|> dtytmDecl
 
 {-================================ PARSE PROGS ===============================-}
 prog :: Parser Prog
