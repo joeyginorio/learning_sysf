@@ -214,3 +214,13 @@ foo = "\n\
 
 parseFile :: String -> Parser a -> IO a
 parseFile f p = fmap (fst . head . parse p) (readFile f)
+
+
+{-================================ PARSE PROGS ===============================-}
+desugarDecl :: Decl -> Term
+desugarDecl (Left ((_,_),(_,[],tm))) = tm
+desugarDecl (Left ((_,(TyAbs ty1 ty2)),(f,(a:as),tm))) =
+  TmAbs a ty1 $ desugarDecl (Left ((f,ty2),(f,as,tm)))
+desugarDecl (Right ([],tyd,tmd)) = desugarDecl $ Left (tyd, tmd)
+desugarDecl (Right (((f,ty):ds),tyd,tmd)) = TmTApp (TmTAbs f tm) ty
+  where tm = desugarDecl (Right (ds,tyd,tmd))
