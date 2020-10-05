@@ -197,7 +197,7 @@ dtytmDecl = do dds <- many (do d <- dDecl
                                return d)
                tyd <- tyDecl
                tmd <- tmDecl
-               return $ Right (dds,tyd,tmd)
+               return $ Right (dds ,tyd,tmd)
 
 decl :: Parser Decl
 decl = tytmDecl <|> dtytmDecl
@@ -216,6 +216,16 @@ parseFile' f p = fmap (parse p) (readFile f)
 
 
 {-================================ PARSE PROGS ===============================-}
+desugarProg :: Prog -> Term
+desugarProg (d:[]) = desugarDecl d
+desugarProg (d@(Left ((f,_),_)):ds) = TmLet [(f,tm1)] tm2
+  where tm1 = desugarDecl d
+        tm2 = desugarProg ds
+desugarProg (d@(Right (_,(f,_),_)):ds) = TmLet [(f,tm1)] tm2
+  where tm1 = desugarDecl d
+        tm2 = desugarProg ds
+
+
 desugarDecl :: Decl -> Term
 desugarDecl (Left ((_,_),(_,[],tm))) = tm
 desugarDecl (Left ((_,(TyAbs ty1 ty2)),(f,(a:as),tm))) =
