@@ -192,7 +192,9 @@ tytmDecl = do tyd <- tyDecl
               return $ Left (tyd,tmd)
 
 dtytmDecl :: Parser Decl
-dtytmDecl = do dds <- many dDecl
+dtytmDecl = do dds <- many (do d <- dDecl
+                               many line
+                               return d)
                tyd <- tyDecl
                tmd <- tmDecl
                return $ Right (dds,tyd,tmd)
@@ -205,15 +207,12 @@ prog :: Parser Prog
 prog = do p <- many decl
           return p
 
-foo = "\n\
-\f :: Bool -> Bool -> Bool -> Bool\n\
-\f x y z = tt\n\
-\\n\
-\g :: Unit -> Bool\n\
-\g w v = ff"
-
 parseFile :: String -> Parser a -> IO a
 parseFile f p = fmap (fst . head . parse p) (readFile f)
+
+-- Similar to parseFile, but includes info about parse for debugging.
+parseFile' :: String -> Parser a -> IO [(a,String)]
+parseFile' f p = fmap (parse p) (readFile f)
 
 
 {-================================ PARSE PROGS ===============================-}
