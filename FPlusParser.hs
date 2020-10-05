@@ -41,7 +41,7 @@ import FPlus
 
 type Prog = [Decl]
 
-type Decl = Either (TyDecl, TmDecl) (DDecl, TyDecl, TmDecl)
+type Decl = Either (TyDecl, TmDecl) ([DDecl], TyDecl, TmDecl)
 type TyDecl = (String, Type)
 type TmDecl = (String, [String], Term)
 type DDecl = (String, Type)
@@ -192,10 +192,10 @@ tytmDecl = do tyd <- tyDecl
               return $ Left (tyd,tmd)
 
 dtytmDecl :: Parser Decl
-dtytmDecl = do dd <- dDecl
+dtytmDecl = do dds <- many dDecl
                tyd <- tyDecl
                tmd <- tmDecl
-               return $ Right (dd,tyd,tmd)
+               return $ Right (dds,tyd,tmd)
 
 decl :: Parser Decl
 decl = tytmDecl <|> dtytmDecl
