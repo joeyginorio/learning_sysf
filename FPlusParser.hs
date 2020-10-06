@@ -38,6 +38,7 @@ foo2 (Foo2 x y) = x
 
 import MParser
 import FPlus
+import qualified F as F
 
 type Prog = [Decl]
 
@@ -216,7 +217,6 @@ parseFile' f p = fmap (parse p) (readFile f)
 
 
 {-============================== DESUGAR PROGS ===============================-}
--- FIX, DTYPES ALSO ADD CONSTRUCTORS TO THE CONTEXT
 desugarProg :: Prog -> Term
 desugarProg (d:[]) = desugarDecl d
 desugarProg (d@(Left ((f,_),_)):ds) = TmLet [(f,tm1)] tm2
@@ -235,11 +235,6 @@ desugarDecl (Right (((f,ty@(TyCase ctys)):ds),tyd,tmd)) = TmTApp (TmTAbs f tm) t
   where tm = TmLet itms (desugarDecl (Right (ds,tyd,tmd)))
         itms = buildConstrs ctys ty
 
-
--- desugarTm :: Term -> F.Term
-
--- desugarTy :: Type -> F.Type
-
 buildConstr :: (Constr, [Type]) -> Type -> (Id, Term)
 buildConstr (c,tys) ty = (c, foldr f (TmConstr c tms ty) tmtys)
   where tms = [TmVar i | i <- vs]
@@ -250,3 +245,21 @@ buildConstr (c,tys) ty = (c, foldr f (TmConstr c tms ty) tmtys)
 buildConstrs :: [(Constr, [Type])] -> Type -> [(Id,Term)]
 buildConstrs ctys ty = map (\x -> buildConstr x ty) ctys
 
+desugarTy :: Type -> F.Type
+desugarTy TyUnit = F.TyUnit
+desugarTy TyBool = F.TyBool
+desugarTy (TyVar i) = F.TyVar i
+desugarTy (TyAbs ty1 ty2) = F.TyAbs ty1' ty2'
+  where ty1' = desugarTy ty1
+        ty2' = desugarTy ty2
+desugarTy (TyTAbs i ty) = F.TyTAbs i ty'
+  where ty' = desugarTy ty
+desugarTy (TyCase ctys) = desugarTyCase ctys
+
+desugarTyCase :: [(Constr, [Type])] -> F.Type
+desugarTyCase ctys = F.TyTAbs "D" (F.TyAbs ty1 (F.TyVar "D"))
+  where ty1 = foldr1 (\x a -> F.TyAbs x a) ty1'
+        ty1' = desugarConstr ((snd . unzip) ctys)
+        desugarConstr = map (foldr (\x a -> F.TyAbs (desugarTy x) a) (F.TyVar "D"))
+
+-- desugarTm :: Term -> F.Term
