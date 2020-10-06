@@ -262,4 +262,25 @@ desugarTyCase ctys = F.TyTAbs "D" (F.TyAbs ty1 (F.TyVar "D"))
         ty1' = desugarConstr ((snd . unzip) ctys)
         desugarConstr = map (foldr (\x a -> F.TyAbs (desugarTy x) a) (F.TyVar "D"))
 
--- desugarTm :: Term -> F.Term
+desugarTm :: Term -> F.Term
+desugarTm TmUnit = F.TmUnit
+desugarTm TmTrue = F.TmTrue
+desugarTm TmFalse = F.TmFalse
+desugarTm (TmVar i) = F.TmVar i
+desugarTm (TmAbs i ty tm) = F.TmAbs i ty' tm'
+  where ty' = desugarTy ty
+        tm' = desugarTm tm
+desugarTm (TmApp tm1 tm2) = F.TmApp tm1' tm2'
+  where tm1' = desugarTm tm1
+        tm2' = desugarTm tm2
+desugarTm (TmTAbs i tm) = F.TmTAbs i tm'
+  where tm' = desugarTm tm
+desugarTm (TmTApp tm ty) = F.TmTApp tm' ty'
+  where tm' = desugarTm tm
+        ty' = desugarTy ty
+desugarTm (TmLet itms tm) = foldr f tm' itms
+  where tm' = desugarTm tm
+        right = (\(Right x) -> x)
+        typeCheck' = (\t -> desugarTy (right (typeCheck t [])))
+        f = (\(i,t) a -> F.TmApp (F.TmAbs i (typeCheck' t) a) (desugarTm t))
+
