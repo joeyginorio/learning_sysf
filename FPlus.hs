@@ -42,8 +42,7 @@ showTm (TmTrue) = text "tt"
 showTm (TmFalse) = text "ff"
 showTm (TmVar i) = text i
 showTm (TmAbs i typ tm) = parens $ (text "lam ") <+> (text i) <+> (text ":") <+>
-                           parens (showTy typ) <+> (text ".") <+>
-                           (nest 3 $ line <+> showTm tm)
+                          parens (showTy typ) <+> (text ".") <+> showTm tm
 showTm (TmApp tm1 tm2) = parens $ showTm tm1 <+> text " " <+> showTm tm2
 showTm (TmTAbs i tm) = parens $ text "forall " <+> text i <+> text "." <+>
                        showTm tm
