@@ -215,7 +215,8 @@ parseFile' :: String -> Parser a -> IO [(a,String)]
 parseFile' f p = fmap (parse p) (readFile f)
 
 
-{-================================ PARSE PROGS ===============================-}
+{-============================== DESUGAR PROGS ===============================-}
+-- FIX, DTYPES ALSO ADD CONSTRUCTORS TO THE CONTEXT
 desugarProg :: Prog -> Term
 desugarProg (d:[]) = desugarDecl d
 desugarProg (d@(Left ((f,_),_)):ds) = TmLet [(f,tm1)] tm2
@@ -225,11 +226,27 @@ desugarProg (d@(Right (_,(f,_),_)):ds) = TmLet [(f,tm1)] tm2
   where tm1 = desugarDecl d
         tm2 = desugarProg ds
 
-
 desugarDecl :: Decl -> Term
 desugarDecl (Left ((_,_),(_,[],tm))) = tm
 desugarDecl (Left ((_,(TyAbs ty1 ty2)),(f,(a:as),tm))) =
   TmAbs a ty1 $ desugarDecl (Left ((f,ty2),(f,as,tm)))
 desugarDecl (Right ([],tyd,tmd)) = desugarDecl $ Left (tyd, tmd)
-desugarDecl (Right (((f,ty):ds),tyd,tmd)) = TmTApp (TmTAbs f tm) ty
-  where tm = desugarDecl (Right (ds,tyd,tmd))
+desugarDecl (Right (((f,ty@(TyCase ctys)):ds),tyd,tmd)) = TmTApp (TmTAbs f tm) ty
+  where tm = TmLet itms (desugarDecl (Right (ds,tyd,tmd)))
+        itms = buildConstrs ctys ty
+
+
+-- desugarTm :: Term -> F.Term
+
+-- desugarTy :: Type -> F.Type
+
+buildConstr :: (Constr, [Type]) -> Type -> (Id, Term)
+buildConstr (c,tys) ty = (c, foldr f (TmConstr c tms ty) tmtys)
+  where tms = [TmVar i | i <- vs]
+        vs = ["c" ++ show i | i <- [0..(length tys - 1)]]
+        f = (\((TmVar i),ty) a -> TmAbs i ty a)
+        tmtys = zip tms tys
+
+buildConstrs :: [(Constr, [Type])] -> Type -> [(Id,Term)]
+buildConstrs ctys ty = map (\x -> buildConstr x ty) ctys
+
