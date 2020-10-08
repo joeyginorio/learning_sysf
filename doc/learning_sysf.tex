@@ -1,8 +1,8 @@
 % For review submission
 %\documentclass[acmsmall,review,anonymous]{acmart}
-\documentclass[acmsmall]{acmart}
+\documentclass[sigplan,10pt]{acmart}
 
-\settopmatter{printfolios=true,printccs=false,printacmref=false}
+\settopmatter{printfolios=false,printccs=false,printacmref=false}
 %% For double-blind review submission, w/ CCS and ACM Reference
 %\documentclass[acmsmall,review,anonymous]{acmart}\settopmatter{printfolios=true}
 %% For single-blind review submission, w/o CCS and ACM Reference (max submission space)
@@ -19,6 +19,7 @@
 \usepackage{booktabs,changepage}
 \usepackage{lipsum}
 \usepackage{setspace}
+\usepackage{stfloats}
 
 \usepackage{titlesec,epigraph, listings}
 \usepackage{etoolbox}
@@ -95,7 +96,7 @@
 \begin{document}
 
 %% Title information
-\title{Learning in System F (Synthesis Pearl)}
+\title{Learning in System F}
 
 %% Author information
 %% Contents and number of authors suppressed with 'anonymous'.
@@ -110,7 +111,6 @@
 %% Author with single affiliation.
 \author{Joey Velez-Ginorio}
 \affiliation{
-  \department{Brain \& Cognitive Sciences}
   \institution{Massachusetts Institute of Technology}
   \streetaddress{43 Vassar St.}
   \city{Cambridge}
@@ -123,7 +123,6 @@
 %% Author with single affiliation.
 \author{Nada Amin}
 \affiliation{
-  \department{John A. Paulson School of Engineering and Applied Sciences}
   \institution{Harvard University}
   \streetaddress{29 Oxford St.}
   \city{Cambridge}
@@ -155,11 +154,11 @@ What might a programming language look like, if its programs could also be learn
 \subsection{A tricky learning problem}
 
 Imagine we're teaching you a program. Your only data is the type $nat \!\to\! nat$. It takes a natural number, and returns a natural number. Any ideas? Perhaps a program which computes...
-$$f(x) = x, \;\;\;\;\;\;f(x) = x + 1,\;\;\;\;\;\; f(x) = x + 2,\;\;\;\;\;\; f(x) = x + \cdots$$
+$$f(x) = x, \;\;\;\;\;\;f(x) = x + 1,\;\;\;\;\;\; f(x) = x + \cdots$$
 The good news is that $f(x) = x + 1$ is correct. The bad news is that the data let you learn a slew of other programs too. It doesn't constrain learning enough if we want to teach $f(x) = x + 1$. As teachers, we can provide better data.
 
 Round 2. Imagine we're teaching you a program. But this time we give you an example of the program's behavior. Your data are the type $nat \!\to\! nat$ and an example $f(1) = 2$. It takes a natural number, and seems to return its successor. Any ideas? Perhaps a program which computes...
-$$f(x) = x + 1,\;\;\;\;\;\; f(x) = x + 2 - 1,\;\;\;\;\;\; f(x) = x + 3 - 2,\;\;\;\;\;\;\cdots$$
+$$f(x) = x + 1,\;\;\;\;\;\; f(x) = x + 2 - 1,\;\;\;\;\;\; f(x) = x + \cdots$$
 The good news is that $f(x) = x + 1$ is correct. And so are all the other programs, as long as we're agnostic to some details. Types and examples impose useful constraints on learning. It's the data we use when learning in System F \cite{girard1989proofs}.
 
 Existing work can learn successor from similar data \cite{osera2015program, polikarpova2016program}. But suppose $nat$ is a church encoding. For some base type $A$, $nat \coloneqq (A \to A) \to (A \to A)$. Natural numbers are then higher-order functions. They take and return functions. In this context, existing work can no longer learn successor. 
@@ -170,7 +169,7 @@ The difficulty is with how to handle functions in the return type. The type $nat
 
 \begin{enumerate}
 \item Don't allow functions in the return type, keep Turing-completeness.
-\item Allow functions in the return type, leave Turing-completeness.
+\item Allow functions in the return type, leave Turing-\\completeness.
 \end{enumerate}
 
 Route 1 is the approach of existing work. They don't allow functions in the return type, but keep an expressive Turing-complete language for learning. This can be a productive move, as many interesting programs don't return functions.
@@ -179,9 +178,75 @@ Route 2 is the approach we take. We don't impose restrictions on the types or ex
 \begin{itemize}
 \item Detail how to learn arbitrary higher-order programs in System F. (Section 2 \& 3)
 \item Prove the soundness and completeness of learning. (Section 2 \& 3)
-\item Provide an implementation of learning, extending strong theoretical guarantees in practice. (Section 4 \& 5)
+\item Implement learning, extending strong theoretical guarantees in practice. (Section 4 \& 5)
 \end{itemize}
 
+\begin{figure*}[b]
+\vspace{.3cm}
+\centering
+\setlength{\tabcolsep}{12pt}
+\begin{tabular}{l r  l r}
+\specialrule{.1em}{0em}{.2em}
+\specialrule{.1em}{0em}{1em}
+    \Large \textsc{Learning} & 
+    &  & \framebox{$\Gamma \vdash \tau \rightsquigarrow e$}\\
+    & & \\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$x:\tau \in \Gamma$}
+            \RightLabel{\textsc{(L-Var)}}
+        \UnaryInfC{$\Gamma \vdash \tau \rightsquigarrow x$}
+        \DisplayProof
+    } &
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$\Gamma,\alpha \vdash \tau \rightsquigarrow e$}
+            \RightLabel{\textsc{(L-TAbs)}}
+        \UnaryInfC{$\Gamma \vdash \forall\alpha.\tau \rightsquigarrow \Lambda \alpha.e$}
+        \DisplayProof
+    }
+    \\
+    & &\\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$\Gamma,x{:}\tau_1 \vdash \tau_2 \rightsquigarrow e_2$}
+            \RightLabel{\textsc{(L-Abs)}}
+        \UnaryInfC{$\Gamma \vdash \tau_1 \to \tau_2 \rightsquigarrow \lam x{:}\tau_1.e_2$}
+        \DisplayProof
+    } &
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$\Gamma \vdash \forall\alpha.\tau_1 \rightsquigarrow \bar{e}$}
+            \RightLabel{\textsc{(L-TApp)}}
+        \UnaryInfC{$\Gamma \vdash [\tau_2/\alpha]\tau_1 \rightsquigarrow \bar{e}\,\lceil\tau_2\rceil$}
+        \DisplayProof
+    }
+    \\
+    & &\\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .05in}
+        \AxiomC{$\Gamma \vdash \tau_1 \to \tau_2 \rightsquigarrow \bar{e}$}
+        \AxiomC{$\Gamma \vdash \tau_1 \rightsquigarrow e$}
+            \RightLabel{\textsc{(L-App)}}
+        \BinaryInfC{$\Gamma \vdash \tau_2 \rightsquigarrow \bar{e}\:e$}
+        \DisplayProof
+    } \\
+    & \\
+\specialrule{.1em}{1em}{0em}
+\end{tabular}
+\caption{Learning from types in System F}
+    \label{fig:learning}
+\end{figure*}
 
 \section{System F}
 We assume you are familiar with System F, the polymorphic lambda calculus. You should know its syntax, typing, and evaluation. If you don't, we co-opt its specification in \cite{pierce2002types}. For a comprehensive introduction we defer the confused or rusty there. Additionally, we provide the specification and relevant theorems in the appendix.
@@ -199,8 +264,8 @@ System F's syntax is simple. There aren't many syntactic forms. Whenever we stat
 
 While simple, the syntax is still expressive. We can encode many staples of typed functional programming: algebraic data types, inductive types, and more \cite{pierce2002types}. For example, consider this encoding of products:
 \begin{align*}
-\tau_1 \times \tau_2 \,&::=\; \forall \alpha.(\tau_1 \to \tau_2 \to \alpha) \to \alpha\\
-\langle e_1,e_2 \rangle &::=\; \Lambda \alpha.\lambda f\!:\!(\tau_1 \to \tau_2 \to \alpha).fe_1e_2 
+\tau_1 \times \tau_2 \,&\coloneqq\; \forall \alpha.(\tau_1 \to \tau_2 \to \alpha) \to \alpha\\
+\langle e_1,e_2 \rangle &\coloneqq\; \Lambda \alpha.\lambda f\!:\!(\tau_1 \to \tau_2 \to \alpha).fe_1e_2 
 \end{align*}
 
 \subsection{Typing}
@@ -226,84 +291,77 @@ The decision procedure checks that two programs exist in the transitive reflexiv
 
 % dont need a figure, but state the normal form syntax like osera does
 % then introduce the learning from types.
+We present learning as a relation between contexts $\Gamma$, programs $e$, and types $\tau$.
+$$\Gamma \vdash \tau \rightsquigarrow e$$
+The relation asserts that given a context $\Gamma$ and type $\tau$, you can learn program $e$.
+
+Like typing, we define the relation with a set of inference rules. These rules confer similar benefits to typing. We can prove useful properties of learning, and the rules guide implementation. 
+
+Unlike typing, we only consider programs $e$ in normal form. We discuss later how this pays dividends in the implementation. With reference to the syntax in the appendix, we define System F programs $e$ in normal form:
+\begin{align*}
+e &\coloneqq\; \bar{e} \;\mid\; \lam x\!:\!\tau.e \;\mid\; \Lambda\alpha.e\\
+\bar{e} &\coloneqq\; x \;\mid\; \bar{e}\;e \;\mid\; \bar{e}\,\lceil\tau\rceil
+\end{align*}
+
+\subsection{Learning, a relation}
+If you squint, you may think that learning in Figure \ref{fig:learning} looks a lot like typing in Figure \ref{fig:typing}. The semblance isn't superficial, but instead reflects an equivalence between learning and typing which we later show. Despite this, the learning relation isn't redundant. It forms the core of an extended learning relation in the next section, where we learn from both types and examples. 
+
+\textsc{(L-Var)} says if $x$ is bound to type $\tau$ in the context $\Gamma$, then you can learn the program $x$ of type $\tau$. 
+\begin{prooftree}
+\def\extraVskip{4pt}
+\def\labelSpacing{4pt}
+	\AxiomC{$x {:} \tau \in x {:} \tau$}
+	\RightLabel{\textsc{(L-Var)}}
+	\UnaryInfC{$x{:}\tau \vdash \tau \rightsquigarrow x$}
+\end{prooftree}
+
+\textsc{(L-Abs)} says if $x$ is bound to type $\tau_1$ in the context $\Gamma$ and you can learn a program $e_2$ from type $\tau_2$, then you can learn the program $\lam x{:}\tau_1.e_2$ from type $\tau_1 \!\to\! \tau_2$ and $x$ is removed from the context.
+\begin{prooftree}
+\def\extraVskip{4pt}
+\def\labelSpacing{4pt}
+	\AxiomC{$\Gamma,x{:}\tau_1 \vdash \tau_2 \!\to\! \tau_2 \rightsquigarrow \lam y{:}\tau_2.y$}
+	\RightLabel{\textsc{(L-Abs)}}
+	\UnaryInfC{$\Gamma \vdash \tau_1 \!\to\! \tau_2 \!\to \!\tau_2 \rightsquigarrow \lam x{:}\tau_1.\lam y{:}\tau_2.y$}
+\end{prooftree}
+
+\textsc{(L-App)} says that if you can learn a program $\bar{e}$ from type $\tau_1 \!\to\! \tau_2$ and a program $e$ from type $\tau_1$, then you can learn $\bar{e}\:e$ from type $\tau_2$.
+\begin{prooftree}
+\def\extraVskip{4pt}
+\def\labelSpacing{4pt}
+	\AxiomC{$\Gamma \vdash \tau \!\to\! \tau \rightsquigarrow \lam x{:}\tau.x$}
+	\AxiomC{$\Gamma \vdash \tau \rightsquigarrow y$}
+	\RightLabel{\textsc{(L-App)}}
+	\BinaryInfC{$\Gamma \vdash \tau \rightsquigarrow (\lam x{:}\tau.x)y $}
+\end{prooftree}
+
+\textsc{(L-TAbs)} says that if $\alpha$ is in the context, and you can learn a program $e$ from type $\tau$, then you can learn a program $\Lambda\alpha.e$ from type $\forall\alpha.\tau$ and $\alpha$ is removed from the context.
+\begin{prooftree}
+\def\extraVskip{4pt}
+\def\labelSpacing{4pt}
+	\AxiomC{$\Gamma,\alpha \vdash \alpha \!\to\! \alpha \rightsquigarrow \lam x{:}\alpha.x$}
+	\RightLabel{\textsc{(L-TAbs)}}
+	\UnaryInfC{$\Gamma \vdash \forall\alpha.\alpha \!\to\! \alpha \rightsquigarrow \Lambda\alpha.\lam x{:}\alpha.x$}
+\end{prooftree}
+
+\textsc{(T-TApp)} says that if you can learn a program $\bar{e}$ from type $\forall\alpha.\tau_1$, then you can learn the program $\bar{e}\,\lceil\tau_2\rceil$ from type $[\tau_2/\alpha]\tau_1$.
+\begin{prooftree}
+\def\extraVskip{4pt}
+\def\labelSpacing{4pt}
+	\AxiomC{$\Gamma \vdash \forall\alpha.\alpha\!\to\!\alpha \rightsquigarrow \Lambda\alpha.\lam x{:}\alpha.x$}
+	\RightLabel{\textsc{(T-TApp)}}
+	\UnaryInfC{$\Gamma \vdash \tau\!\to\!\tau \rightsquigarrow (\Lambda\alpha.\lam x{:}\alpha.x)\lceil nat\rceil$}
+\end{prooftree}
+
+\subsection{Metatheory}
 
 
-
-
-\begin{figure}[ht]
-\centering
-\setlength{\tabcolsep}{12pt}
-\begin{tabular}{l r  l r}
-\specialrule{.1em}{0em}{.2em}
-\specialrule{.1em}{0em}{1em}
-    \Large \textsc{Learning} & 
-    &  & \framebox{$\Gamma \vdash \tau \rightsquigarrow e$}\\
-    & & \\
-    \multicolumn{2}{c}{
-    \def\extraVskip{4pt}
-    \def\labelSpacing{4pt}
-    \def\defaultHypSeparation{\hskip .05in}
-        \AxiomC{$x:\tau \in \Gamma$}
-            \RightLabel{\textsc{(L-Var)}}
-        \UnaryInfC{$\Gamma \vdash \tau \rightsquigarrow x$}
-        \DisplayProof
-    } &
-    \multicolumn{2}{c}{
-    \def\extraVskip{4pt}
-    \def\labelSpacing{4pt}
-    \def\defaultHypSeparation{\hskip .05in}
-        \AxiomC{$\Gamma,\alpha \vdash \tau \rightsquigarrow e$}
-            \RightLabel{\textsc{(G-TAbs)}}
-        \UnaryInfC{$\Gamma \vdash \forall\alpha.\tau \rightsquigarrow \lam \alpha.e$}
-        \DisplayProof
-    }
-    \\
-    & &\\
-    \multicolumn{2}{c}{
-    \def\extraVskip{4pt}
-    \def\labelSpacing{4pt}
-    \def\defaultHypSeparation{\hskip .05in}
-        \AxiomC{$\Gamma,x{:}\tau_1 \vdash \tau_2 \rightsquigarrow e_2$}
-            \RightLabel{\textsc{(L-Abs)}}
-        \UnaryInfC{$\Gamma \vdash \tau_1 \to \tau_2 \rightsquigarrow \lam x{:}\tau_1.e_2$}
-        \DisplayProof
-    } &
-    \multicolumn{2}{c}{
-    \def\extraVskip{4pt}
-    \def\labelSpacing{4pt}
-    \def\defaultHypSeparation{\hskip .05in}
-        \AxiomC{$\Gamma \vdash \forall\alpha.\tau_1 \rightsquigarrow e$}
-            \RightLabel{\textsc{(L-TApp)}}
-        \UnaryInfC{$\Gamma \vdash [\tau_2/\alpha]\tau_1 \rightsquigarrow e\lceil\tau_2\rceil$}
-        \DisplayProof
-    }
-    \\
-    & &\\
-    \multicolumn{2}{c}{
-    \def\extraVskip{4pt}
-    \def\labelSpacing{4pt}
-    \def\defaultHypSeparation{\hskip .05in}
-        \AxiomC{$\Gamma \vdash \tau_1 \to \tau_2 \rightsquigarrow e_1$}
-        \AxiomC{$\Gamma \vdash \tau_1 \rightsquigarrow e_2$}
-            \RightLabel{\textsc{(L-App)}}
-        \BinaryInfC{$\Gamma \vdash \tau_2 \rightsquigarrow e_1e_2$}
-        \DisplayProof
-    } \\
-    & \\
-\specialrule{.1em}{1em}{0em}
-\end{tabular}
-\caption{Learning from types in System F}
-    \label{fig:learning}
-\end{figure}
-
+\newpage
 \section{Learning from Examples}
 % present the augmented relation
 % state completeness/soundness result
 
-%\section{Implementation}
+\section{Implementation}
 
-We have implemented a proof-of-concept prototype, with promising results.
-(Reviewers: see the artifact attached.)
 
 % how to make combinatorial search easier
 % - enumerating normal form programs
@@ -313,68 +371,18 @@ We have implemented a proof-of-concept prototype, with promising results.
 %    - sum types split examples
 %	 - product types generate subproblems
 
-%\section{Experiments}
+\section{Experiments}
 
-The implementation of learning from types is in the function {\tt genTerms} in {\tt learning.hs}. All the code in this section is in Haskell and runs in {\tt ghci}:
-\begin{verbatim}
-genTerms TyBool [] 5
-\end{verbatim}
-
-That generates all terms of type {\tt Bool} from the empty context, up to an AST size 5.
-
-The implementation of learning from examples is in the function {\tt lrnTerms} in {\tt learning.hs}.
-\begin{verbatim}
-lrnTerms (TyAbs TyBool TyBool) [InTm TmTrue (Out TmTrue)] [] [] 3
-\end{verbatim}
-
-That generates all terms of type {\tt Bool->Bool} from the empty context, up to an AST size 3 \emph{and} which satisfy the example $<tt,tt>$. 
-
-To generate polymorphic terms, our examples include types. These types are used to instantiate an example at a particular base type. For example, run the following in ghci to learn at type $(\forall X.X->X)$ with examples $<Bool,tt,tt>$:
-\begin{verbatim}
-lrnTerms (TyTAbs "X" (TyAbs (TyVar "X") (TyVar "X")))
-         [InTy TyBool (InTm TmTrue (Out TmTrue))]
-         [] [] 4
-\end{verbatim}
-This will produce the polymorphic identity function.
-% TODO show the production
-
-The implementation ``works'' minus a programs which require multiple type applications. There's also a bottleneck in performance that becomes apparent when synthesizing programs at around AST depth 20, because of the way the type application rule is currently implemented for learning.
 
 \section{Related Work}
 
-The literature on synthesis is both vast and rapidly expanding. Therefore, we inevitably cherry-pick among approaches that have inspired us while covering a varied landscape as well.
 
 \subsection{Type-driven synthesis}
-
-The seminal works on type-driven synthesis by \citet{osera2015program}. demonstrates that you can have none-``magical'' approaches to synthesis: everything is predictable, such as for instance, needing trace-complete examples. We take inspiration from this work, and suggest a way forward for examples with higher-order functions in the input/output exammples. We do not require trace completeness for System F is strongly normalizing.
-
-\citet{polikarpova2016program} have extended the typed-driven approaach to refinement types. This is interesting because refinement types, such as Liquid Types~\cite{lrondon2012liquid} are rather expressive and the types can act as rich specification. The idea of liquid types has been researched in many languages beyond the initial ML-style setting: for example, Javascript~\cite{chugh2012nested} and Haskell~\cite{liquidhaskell}. Our work extends the type-driven approach in an orthogonal direction.
-
-\subsection{Other approaches to synthesis}
-
-Program Sketching~\cite{solar2008program} has been a promising approach to synthesis. It relies on specification and holes. We rely on types instead of full-blown specifications.
-
-Microsoft Prose~\cite{msprose} has enabled the program demonstration of
-Excel. The Microsoft team has packaged the lessons learned from
-FlashFill~\cite{gulwani2011automating}  into a generic framework Flash Meta~\cite{flashmeta}. The key
-insight is that witness functions (also known as reverse semantics)
-are enough to speed up synthesis a for a domain-specific language. In
-Prose, the synthesizer author defines a grammar for the language, the
-semantics and the inverse semantics, and the framework automagically
-creates the synthesizer.
-
-Rosette~\cite{rosette} is a solver-aided language framework that similarly enables a separation of concern between domain and generic solving, based on satisfiability modulo theory underneath the hood. In Rosette, one can write a vanilla interpreter and get a synthesizer.
-
-Another term for synthesis used in the learning community is program induction.
-Differentiable programming such as for Forth~\cite{dforth} and Datalog~\cite{ddatalog} use relaxation techniques to go from symbol to neural.
-Neural-Guided Search~\cite{webyrd-nips,dreamcoder} uses neural networks \emph{not} for creating programs but for guiding the search on the symbolic possibilities.
-
-Inductive logic programming~\cite{ilp} provides a classical avenue for synthesis in Prolog and related programming languages. An exciting recent development is the work of~\citet{cropper} in which programs are learned through failures.
 
 
 \section{Conclusion}
 
-We offer a promising route to type-driven synthesis through learning in System F. Our main insight is that System F provides a fruitful ground for further synthesis work. In addition to a declarative theory, we developed a small implementation to testbed our ideas.
+
 
 %% Acknowledgments
 %%\begin{acks}                            %% acks environment is optional
@@ -393,7 +401,6 @@ We offer a promising route to type-driven synthesis through learning in System F
 %%  National Science Foundation.
 %%\end{acks}
 
-
 %% Bibliography
 \bibliography{refs.bib}
 
@@ -402,7 +409,7 @@ We offer a promising route to type-driven synthesis through learning in System F
 %%\appendix
 \section{Appendix}
 \subsection{Specification of System F}
-\begin{figure}[h]
+\begin{figure*}[b]
 \centering
 \setlength{\tabcolsep}{12pt}
 \begin{tabular}{l  r}
@@ -414,7 +421,8 @@ We offer a promising route to type-driven synthesis through learning in System F
     \begin{math}
     \setlength{\jot}{-2pt}
     \begin{aligned}
-    e ::= \;& && \hspace*{.25in} \textsc{terms:}\\
+    e ::= \;& && \hspace*{.25in} \textsc{
+    :}\\
         & x && \hspace*{.25in} \textit{variable}\\
         & e_1e_2 && \hspace*{.25in} \textit{application}\\
         & \lam x {:} \tau.e && \hspace*{.25in} \textit{abstraction}\\
@@ -445,9 +453,9 @@ We offer a promising route to type-driven synthesis through learning in System F
 \end{tabular}
 \caption{Syntax in System F}
     \label{fig:syntax}
-\end{figure}
+\end{figure*}
 
-\begin{figure}[h]
+\begin{figure*}[b]
 \centering
 \setlength{\tabcolsep}{12pt}
 \begin{tabular}{l r  l r}
@@ -511,7 +519,7 @@ We offer a promising route to type-driven synthesis through learning in System F
 \end{tabular}
 \caption{Typing in System F}
     \label{fig:typing}
-\end{figure}
+\end{figure*}
 
 \begin{theorem}[\textsc{Progress in Typing}]
 If $e$ is a closed, well-typed program, then either $e$ is a value or else there is some program $e'$ such that $e \to_\beta e'$.
@@ -522,7 +530,7 @@ If $\,\Gamma \vdash e : \tau$ and $e \to_\beta e'$, then $\Gamma \vdash e' : \ta
 \label{preservation-typing}
 \end{theorem} 
 
-\begin{figure}[h]
+\begin{figure*}[b]
 \centering
 \setlength{\tabcolsep}{12pt}
 \begin{tabular}{l r  l r}
@@ -581,7 +589,7 @@ If $\,\Gamma \vdash e : \tau$ and $e \to_\beta e'$, then $\Gamma \vdash e' : \ta
 \end{tabular}
 \caption{Evaluating in System F}
     \label{fig:evaluating}
-\end{figure}
+\end{figure*}
 
 \begin{theorem}[\textsc{Normalization in Evaluation}]
 Well-typed programs in System F always evaluate to a value, to a normal form.
