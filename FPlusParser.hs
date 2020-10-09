@@ -283,4 +283,25 @@ desugarTm (TmLet itms tm) = foldr f tm' itms
         right = (\(Right x) -> x)
         typeCheck' = (\t -> desugarTy (right (typeCheck t [])))
         f = (\(i,t) a -> F.TmApp (F.TmAbs i (typeCheck' t) a) (desugarTm t))
+desugarTm (TmConstr c tms ty) = desugarConstr c tms ty
 
+
+desugarConstr :: Constr -> [Term] -> Type -> F.Term
+desugarConstr c tms (TyCase ctys) = foldl (\a t -> F.TmApp a (desugarTm t)) tm tms
+  where tyas = snd $ (filter (\(c',_) -> if c == c' then True else False) ctys) !! 0
+        as = ["a" ++ show i | i <- [0..(length tyas - 1)]]
+        tycs = getTycs ctys
+        cs = ["c" ++ show i | i <- [0..(length tycs - 1)]]
+        tm = foldr (\(i,t) a -> F.TmAbs i (desugarTy t) a) tm' (zip as tyas)
+        tm' = foldr (\(i,t) a -> F.TmAbs i (desugarTy t) a) tm'' (zip cs tycs)
+        ci = getCi c ctys
+        tm'' = foldr1 F.TmApp ((F.TmVar (cs !! ci)):(map F.TmVar as))
+
+getTycs :: [(Constr,[Type])] -> [Type]
+getTycs [] = []
+getTycs ((c,tys):ctys) = ty : (getTycs ctys)
+  where ty = foldr (\x a -> TyAbs x a) (TyVar "D") tys
+
+getCi :: Constr -> [(Constr, [Type])] -> Int
+getCi c [] = 0
+getCi c ((c',tys):ctys) = if c == c' then 0 else 1 + getCi c ctys
