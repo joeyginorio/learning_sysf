@@ -196,7 +196,7 @@ typeCheck (TmConstr c tms ty) ctx =
        otherwise  -> Left $ ErConstr1 ty
 typeCheck (TmCase tm tmtms) ctx =
   do ty <- typeCheck tm ctx
-     tm1s <- sequence $ map (\tm -> typeCheck tm ctx) ((fst . unzip) tmtms)
+     -- tm1s <- sequence $ map (\tm -> typeCheck tm ctx) ((fst . unzip) tmtms)
      let ctx1s = map cToContext ((fst . unzip) tmtms)
      let ctx1tm2s = zip ctx1s ((snd . unzip) tmtms)
      tm2s <- sequence $ map (\(ctx1,tm2) -> typeCheck tm2 (ctx ++ ctx1)) ctx1tm2s
