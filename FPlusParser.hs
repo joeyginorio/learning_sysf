@@ -257,10 +257,10 @@ desugarTy (TyTAbs i ty) = F.TyTAbs i ty'
 desugarTy (TyCase ctys) = desugarTyCase ctys
 
 desugarTyCase :: [(Constr, [Type])] -> F.Type
-desugarTyCase ctys = F.TyTAbs "D" (F.TyAbs ty1 (F.TyVar "D"))
-  where ty1 = foldr1 (\x a -> F.TyAbs x a) ty1'
+desugarTyCase ctys = F.TyTAbs "#R" ty1
+  where ty1 = foldr (\x a -> F.TyAbs x a) (F.TyVar "#R") ty1'
         ty1' = desugarConstr ((snd . unzip) ctys)
-        desugarConstr = map (foldr (\x a -> F.TyAbs (desugarTy x) a) (F.TyVar "D"))
+        desugarConstr = map (foldr (\x a -> F.TyAbs (desugarTy x) a) (F.TyVar "#R"))
 
 desugarTm :: Term -> F.Term
 desugarTm TmUnit = F.TmUnit
@@ -293,15 +293,43 @@ desugarConstr c tms (TyCase ctys) = foldl (\a t -> F.TmApp a (desugarTm t)) tm t
         tycs = getTycs ctys
         cs = ["c" ++ show i | i <- [0..(length tycs - 1)]]
         tm = foldr (\(i,t) a -> F.TmAbs i (desugarTy t) a) tm' (zip as tyas)
-        tm' = foldr (\(i,t) a -> F.TmAbs i (desugarTy t) a) tm'' (zip cs tycs)
+        tm' = F.TmTAbs "#R" tm''
+        tm'' = foldr (\(i,t) a -> F.TmAbs i (desugarTy t) a) tm''' (zip cs tycs)
         ci = getCi c ctys
-        tm'' = foldr1 F.TmApp ((F.TmVar (cs !! ci)):(map F.TmVar as))
+        tm''' = foldl1 F.TmApp ((F.TmVar (cs !! ci)):(map F.TmVar as))
 
 getTycs :: [(Constr,[Type])] -> [Type]
 getTycs [] = []
 getTycs ((c,tys):ctys) = ty : (getTycs ctys)
-  where ty = foldr (\x a -> TyAbs x a) (TyVar "D") tys
+  where ty = foldr (\x a -> TyAbs x a) (TyVar "#R") tys
 
 getCi :: Constr -> [(Constr, [Type])] -> Int
 getCi c [] = 0
 getCi c ((c',tys):ctys) = if c == c' then 0 else 1 + getCi c ctys
+
+desugarCase :: Term -> [(Term,Term)] -> F.Term
+desugarCase dtm tmtms@((TmConstr _ _ ty@(TyCase ctys),rtm):tmtms') =
+  let dty = desugarTy ty
+      dtm' = desugarTm dtm
+      tycs = getTycs ctys
+      cs = ["c" ++ show i | i <- [0..(length tycs - 1)]]
+      tm = F.TmAbs "#D" dty tm'
+      tm' = F.TmTAbs "#R" tm''
+      tm'' = foldr (\(i,t) a -> F.TmAbs i (desugarTy t) a) tm'''' (zip cs tycs)
+      tm''' = (F.TmTApp (F.TmVar "#D") (F.TyVar "#R"))
+      tm'''' = foldl F.TmApp tm''' (map F.TmVar cs)
+      right = (\(Right x) -> x)
+      rty = desugarTy $ right (typeCheck (TmCase dtm tmtms) [])
+      cctms = desugarCCases tmtms
+      in foldl F.TmApp (F.TmTApp (F.TmApp tm dtm') rty) cctms
+      -- in tm
+
+desugarCCases :: [(Term, Term)] -> [F.Term]
+desugarCCases tmtms = map desugarCCase tmtms
+
+desugarCCase :: (Term, Term) -> F.Term
+desugarCCase (TmConstr c vs (TyCase ctys), tm) =
+  let is = [i | (TmVar i) <- vs]
+      tyis = snd $ (filter (\(c',_) -> if c == c' then True else False) ctys) !! 0
+      tm' = desugarTm tm
+      in foldr (\(i,ty) a -> F.TmAbs i (desugarTy ty) a) tm' (zip is tyis)
