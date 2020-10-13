@@ -262,6 +262,9 @@ subTypeTerm x typ t@(TmTAbs i trm) fvs
   | x == i = t
   | x /= i = TmTAbs i trm'
   where trm' = subTypeTerm x typ trm fvs
+subTypeTerm x typ t@(TmTApp trm typ') fvs = (TmTApp trm' typ'')
+  where trm' = subTypeTerm x typ trm fvs
+        typ'' = subType x typ typ' fvs
 
 -- Evaluate terms, assuming well-typed
 eval :: Term -> Env -> Term
