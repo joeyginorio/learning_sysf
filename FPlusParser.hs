@@ -39,6 +39,7 @@ foo2 (Foo2 x y) = x
 import MParser
 import FPlus
 import qualified F as F
+import qualified Data.Map as M
 
 type Prog = [Decl]
 
@@ -129,7 +130,7 @@ tmLet = do symbol "let"
 
 tmConstr :: Parser Term
 tmConstr = do c <- constructor
-              tms <- many (tmVar <|> tm)
+              tms <- many (tmAtom <|> tm)
               symbol "as"
               a <- ty
               return $ TmConstr c tms a
@@ -217,6 +218,10 @@ parseFile' f p = fmap (parse p) (readFile f)
 
 
 {-============================== DESUGAR PROGS ===============================-}
+desugar :: Prog -> F.Term
+desugar p = desugarTm . desugarProg' $ p
+  where desugarProg' = (\p -> eval (desugarProg p) (M.empty, freshTmVars))
+
 desugarProg :: Prog -> Term
 desugarProg (d:[]) = desugarDecl d
 desugarProg (d@(Left ((f,_),_)):ds) = TmLet [(f,tm1)] tm2
@@ -284,6 +289,7 @@ desugarTm (TmLet itms tm) = foldr f tm' itms
         typeCheck' = (\t -> desugarTy (right (typeCheck t [])))
         f = (\(i,t) a -> F.TmApp (F.TmAbs i (typeCheck' t) a) (desugarTm t))
 desugarTm (TmConstr c tms ty) = desugarConstr c tms ty
+desugarTm (TmCase tm tmtms) = desugarCase tm tmtms
 
 
 desugarConstr :: Constr -> [Term] -> Type -> F.Term
@@ -319,10 +325,10 @@ desugarCase dtm tmtms@((TmConstr _ _ ty@(TyCase ctys),rtm):tmtms') =
       tm''' = (F.TmTApp (F.TmVar "#D") (F.TyVar "#R"))
       tm'''' = foldl F.TmApp tm''' (map F.TmVar cs)
       right = (\(Right x) -> x)
-      rty = desugarTy $ right (typeCheck (TmCase dtm tmtms) [])
+      ctx = [TmBind i ty | (TmVar i) <- [dtm]]
+      rty = desugarTy $ right (typeCheck (TmCase dtm tmtms) ctx)
       cctms = desugarCCases tmtms
       in foldl F.TmApp (F.TmTApp (F.TmApp tm dtm') rty) cctms
-      -- in tm
 
 desugarCCases :: [(Term, Term)] -> [F.Term]
 desugarCCases tmtms = map desugarCCase tmtms
