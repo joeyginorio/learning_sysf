@@ -222,14 +222,34 @@ desugar :: Prog -> F.Term
 desugar p = desugarTm . desugarProg' $ p
   where desugarProg' = (\p -> eval (desugarProg p) (M.empty, freshTmVars))
 
+-- desugarProg :: Prog -> Term
+-- desugarProg (d:[]) = desugarDecl d
+-- desugarProg (d@(Left ((f,_),_)):ds) = TmLet [(f,tm1)] tm2
+--   where tm1 = desugarDecl d
+--         tm2 = desugarProg ds
+-- desugarProg (d@(Right (_,(f,_),_)):ds) = TmLet [(f,tm1)] tm2
+--   where tm1 = desugarDecl d
+--         tm2 = desugarProg ds
+
 desugarProg :: Prog -> Term
 desugarProg (d:[]) = desugarDecl d
-desugarProg (d@(Left ((f,_),_)):ds) = TmLet [(f,tm1)] tm2
+desugarProg dds@(d@(Left ((f,_),_)):ds) = TmLet [(f,tm1)] tm2
   where tm1 = desugarDecl d
-        tm2 = desugarProg ds
-desugarProg (d@(Right (_,(f,_),_)):ds) = TmLet [(f,tm1)] tm2
+        tm2 = foldr (\(i,t) a -> subTypeTerm i t a fvs) dds' ddecls
+        dds' = desugarDecl $ last dds
+        fvs = freshTmVars
+        ddecls = getDDecl dds
+desugarProg dds@(d@(Right (_,(f,_),_)):ds) = TmLet [(f,tm1)] tm2
   where tm1 = desugarDecl d
-        tm2 = desugarProg ds
+        tm2 = foldr (\(i,t) a -> subTypeTerm i t a fvs) dds' ddecls
+        dds' = desugarDecl $ last dds
+        fvs = freshTmVars
+        ddecls = getDDecl dds
+
+getDDecl :: Prog -> [DDecl]
+getDDecl [] = []
+getDDecl ((Right (d,_,_)):ds) = d ++ getDDecl ds
+getDDecl ((Left d):ds) = getDDecl ds
 
 desugarDecl :: Decl -> Term
 desugarDecl (Left ((_,_),(_,[],tm))) = tm
@@ -239,8 +259,7 @@ desugarDecl (Right ([],tyd,tmd)) = desugarDecl $ Left (tyd, tmd)
 desugarDecl (Right (((f,ty@(TyCase ctys)):ds),tyd,tmd)) =
   -- TmTApp (TmTAbs f tm) ty
   subTypeTerm f ty tm freshTyVars
-  where tm = TmLet itms (desugarDecl (Right (ds,tyd,tmd)))
-        itms = buildConstrs ctys ty
+  where tm = (desugarDecl (Right (ds,tyd,tmd)))
 
 buildConstr :: (Constr, [Type]) -> Type -> (Id, Term)
 buildConstr (c,tys) ty = (c, foldr f (TmConstr c tms ty) tmtys)
