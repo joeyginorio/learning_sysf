@@ -236,7 +236,9 @@ desugarDecl (Left ((_,_),(_,[],tm))) = tm
 desugarDecl (Left ((_,(TyAbs ty1 ty2)),(f,(a:as),tm))) =
   TmAbs a ty1 $ desugarDecl (Left ((f,ty2),(f,as,tm)))
 desugarDecl (Right ([],tyd,tmd)) = desugarDecl $ Left (tyd, tmd)
-desugarDecl (Right (((f,ty@(TyCase ctys)):ds),tyd,tmd)) = TmTApp (TmTAbs f tm) ty
+desugarDecl (Right (((f,ty@(TyCase ctys)):ds),tyd,tmd)) =
+  -- TmTApp (TmTAbs f tm) ty
+  subTypeTerm f ty tm freshTyVars
   where tm = TmLet itms (desugarDecl (Right (ds,tyd,tmd)))
         itms = buildConstrs ctys ty
 
