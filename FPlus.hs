@@ -221,6 +221,7 @@ allVarsC ((TmConstr _ tms _):cs) = allVars tms && allVarsC cs
 allVarsC (c:cs) = False
 
 allVars :: [Term] -> Bool
+allVars (TmUnit:[]) = True
 allVars tms = all (\x -> case x of (TmVar _) -> True; otherwise -> False) tms
 
 -- Given a TyCase and TmCase, checks if you have a complete pattern match
