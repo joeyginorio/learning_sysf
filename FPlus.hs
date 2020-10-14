@@ -462,6 +462,8 @@ eval (TmCase (TmConstr c tms ty) tmtms) (_,fvs) =
       ids = [i | (TmVar i) <- tms']
       idtms = zip ids tms
       in subTerms idtms tm2 fvs
+eval (TmCase tm tmtms) e@(_,fvs) = eval (TmCase tm' tmtms) e
+  where tm' = eval tm e
 
 evalLet :: [(Id,Term)] -> Term -> [Id] -> Term
 evalLet [] tm _ = tm
