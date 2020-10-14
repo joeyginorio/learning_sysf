@@ -38,6 +38,7 @@ foo2 (Foo2 x y) = x
 
 import MParser
 import FPlus
+import Control.Monad
 import qualified F as F
 import qualified Data.Map as M
 
@@ -130,10 +131,11 @@ tmLet = do symbol "let"
 
 tmConstr :: Parser Term
 tmConstr = do c <- constructor
-              tms <- many (tmAtom <|> tm)
+              tms <- liftM f (many (tmAtom <|> tm))
               symbol "as"
               a <- ty
               return $ TmConstr c tms a
+           where f = (\x -> if x == [] then [TmUnit] else x)
 
 tmCase :: Parser Term
 tmCase = do symbol "case"
@@ -179,7 +181,7 @@ dDecl = do symbol "data"
            d <- constructor
            symbol "="
            c1 <- constructor
-           tys1 <- many ty
+           tys1 <- liftM (\x -> if x == [] then [TyUnit] else x) (many ty)
            ctys <- many (do symbol "\n" <|> (symbol "")
                             symbol "|"
                             c <- constructor
@@ -222,15 +224,6 @@ desugar :: Prog -> F.Term
 desugar p = desugarTm . desugarProg' $ p
   where desugarProg' = (\p -> eval (desugarProg p) (M.empty, freshTmVars))
 
--- desugarProg :: Prog -> Term
--- desugarProg (d:[]) = desugarDecl d
--- desugarProg (d@(Left ((f,_),_)):ds) = TmLet [(f,tm1)] tm2
---   where tm1 = desugarDecl d
---         tm2 = desugarProg ds
--- desugarProg (d@(Right (_,(f,_),_)):ds) = TmLet [(f,tm1)] tm2
---   where tm1 = desugarDecl d
---         tm2 = desugarProg ds
-
 desugarProg :: Prog -> Term
 desugarProg (d:[]) = desugarDecl d
 desugarProg dds@(d@(Left ((f,_),_)):ds) = TmLet [(f,tm1)] tm2
@@ -257,7 +250,6 @@ desugarDecl (Left ((_,(TyAbs ty1 ty2)),(f,(a:as),tm))) =
   TmAbs a ty1 $ desugarDecl (Left ((f,ty2),(f,as,tm)))
 desugarDecl (Right ([],tyd,tmd)) = desugarDecl $ Left (tyd, tmd)
 desugarDecl (Right (((f,ty@(TyCase ctys)):ds),tyd,tmd)) =
-  -- TmTApp (TmTAbs f tm) ty
   subTypeTerm f ty tm freshTyVars
   where tm = (desugarDecl (Right (ds,tyd,tmd)))
 
