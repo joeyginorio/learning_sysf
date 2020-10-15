@@ -109,55 +109,68 @@ tmVar :: Parser Term
 tmVar = do  x <- identifier keywords
             return $ TmVar x
 
-tmAbs :: Parser Term
-tmAbs = do  symbol "lam"
-            x <- identifier keywords
-            symbol ":"
-            a <- ty
-            symbol "."
-            t <- tm
-            return $ TmAbs x a t
+tmAbs :: [Type] -> Parser Term
+tmAbs tys = do  symbol "lam"
+                x <- identifier keywords
+                symbol ":"
+                a <- ty
+                symbol "."
+                t <- tm tys
+                return $ TmAbs x a t
 
-tmLet :: Parser Term
-tmLet = do symbol "let"
-           itms <- many (do  x <- identifier keywords
-                             symbol "="
-                             t <- tm
-                             line
-                             return (x,t))
-           symbol "in"
-           t <- tm
-           return $ TmLet itms t
+tmLet :: [Type] -> Parser Term
+tmLet tys = do symbol "let"
+               itms <- many (do  x <- identifier keywords
+                                 symbol "="
+                                 t <- tm tys
+                                 line
+                                 return (x,t))
+               symbol "in"
+               t <- tm tys
+               return $ TmLet itms t
 
-tmConstr :: Parser Term
-tmConstr = do c <- constructor
-              tms <- liftM f (many (tmAtom <|> tm))
-              symbol "as"
-              a <- ty
-              return $ TmConstr c tms a
-           where f = (\x -> if x == [] then [TmUnit] else x)
+tmConstr :: [Type] -> Parser Term
+tmConstr [] = do c <- constructor
+                 tms <- liftM f (many (tmAtom [] <|> tm []))
+                 symbol "as"
+                 a <- ty
+                 return $ TmConstr c tms a
+                   where f = (\x -> if x == [] then [TmUnit] else x)
+tmConstr tys = do c <- constructor
+                  tms <- liftM f (many (tmAtom tys <|> tm tys))
+                  let a = tyFromC c tys
+                  return $ TmConstr c tms a
+                    where f = (\x -> if x == [] then [TmUnit] else x)
 
-tmCase :: Parser Term
-tmCase = do symbol "case"
-            t <- tm
-            symbol "of"
-            symbol "\n" <|> (symbol "")
-            tmtms <- many (do t1 <- tm
-                              symbol "->"
-                              t2 <- tm
-                              (symbol ";" <|> symbol "\n" <|> symbol "")
-                              return (t1,t2))
-            return $ TmCase t tmtms
+tyFromC :: Constr -> [Type] -> Type
+tyFromC c (ty:[]) = ty
+tyFromC c (ty:tys) = if tyInC c ty then ty else tyFromC c tys
 
-tmAtom :: Parser Term
-tmAtom = tmCase <|> tmLet <|> tmAbs <|> tmUnit <|> tmTrue <|> tmFalse <|>
-         tmConstr <|> tmVar <|> parens tm
+tyInC :: Constr -> Type -> Bool
+tyInC c (TyCase ctys) = any (\(c',tys) -> c == c') ctys
+tyInc _ _ = False
+
+tmCase :: [Type] -> Parser Term
+tmCase tys = do symbol "case"
+                t <- tm tys
+                symbol "of"
+                symbol "\n" <|> (symbol "")
+                tmtms <- many (do t1 <- tm tys
+                                  symbol "->"
+                                  t2 <- tm tys
+                                  (symbol ";" <|> symbol "\n" <|> symbol "")
+                                  return (t1,t2))
+                return $ TmCase t tmtms
+
+tmAtom :: [Type] -> Parser Term
+tmAtom tys = tmCase tys <|> tmLet tys <|> tmAbs tys <|> tmUnit <|> tmTrue <|>
+             tmFalse <|> tmConstr tys <|> tmVar <|> parens (tm tys)
 
 tmAppOp :: Parser (Term -> Term -> Term)
 tmAppOp = return TmApp
 
-tm :: Parser Term
-tm = do tmAtom `chainl1` tmAppOp
+tm :: [Type] -> Parser Term
+tm tys = do (tmAtom tys) `chainl1` tmAppOp
 
 
 {-================================ PARSE DECLS ===============================-}
@@ -168,13 +181,13 @@ tyDecl = do allSpace
             a <- ty
             return (f,a)
 
-tmDecl :: Parser TmDecl
-tmDecl = do allSpace
-            f <- identifier keywords
-            ps <- many (identifier keywords)
-            symbol "="
-            t <- tm
-            return (f,ps,t)
+tmDecl :: [Type] -> Parser TmDecl
+tmDecl tys = do allSpace
+                f <- identifier keywords
+                ps <- many (identifier keywords)
+                symbol "="
+                t <- tm tys
+                return (f,ps,t)
 
 dDecl :: Parser DDecl
 dDecl = do symbol "data"
@@ -190,26 +203,38 @@ dDecl = do symbol "data"
            return (d, (TyCase ((c1,tys1):ctys)))
 
 
-tytmDecl :: Parser Decl
-tytmDecl = do tyd <- tyDecl
-              tmd <- tmDecl
-              return $ Left (tyd,tmd)
+tytmDecl :: [Type] -> Parser Decl
+tytmDecl tys = do tyd <- tyDecl
+                  tmd <- tmDecl tys
+                  return $ Left (tyd,tmd)
 
-dtytmDecl :: Parser Decl
-dtytmDecl = do dds <- many (do d <- dDecl
-                               many line
-                               return d)
-               tyd <- tyDecl
-               tmd <- tmDecl
-               return $ Right (dds ,tyd,tmd)
+dtytmDecl :: [Type] -> Parser Decl
+dtytmDecl tys = do dds <- many (do d <- dDecl
+                                   many line
+                                   return d)
+                   tyd <- tyDecl
+                   tmd <- tmDecl (((snd . unzip) dds) ++ tys)
+                   return $ Right (dds ,tyd,tmd)
 
-decl :: Parser Decl
-decl = tytmDecl <|> dtytmDecl
+decl :: [Type] -> Parser Decl
+decl tys = tytmDecl tys <|> dtytmDecl tys
 
 {-================================ PARSE PROGS ===============================-}
 prog :: Parser Prog
-prog = do p <- many decl
-          return p
+prog = prog' [] [] 20
+
+prog' :: Prog -> [Type] -> Int -> Parser Prog
+prog' p tys 0 = return p
+prog' p tys n = (do (d,tys') <- decl' tys
+                    prog' (p++[d]) (tys++tys') (n-1)) <|> prog' p tys (n-1)
+
+decl' :: [Type] -> Parser (Decl, [Type])
+decl' tys = do d <- decl tys
+               return (d, tys ++ tysFromDecl d)
+
+tysFromDecl :: Decl -> [Type]
+tysFromDecl (Left _) = []
+tysFromDecl (Right (dds,_,_)) = (snd . unzip) dds
 
 parseFile :: String -> Parser a -> IO a
 parseFile f p = fmap (fst . head . parse p) (readFile f)
