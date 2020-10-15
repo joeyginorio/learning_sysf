@@ -52,6 +52,10 @@ item = P (\inp -> case inp of
                     ""     -> []
                     (x:xs) -> [(x,xs)])
 
+look :: Parser ()
+look = P (\inp -> case inp of
+                    ""     -> []
+                    (x:xs) -> [((),(x:xs))])
 
 {- =========================== DERIVED PRIMITIVES ============================-}
 
