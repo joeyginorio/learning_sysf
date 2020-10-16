@@ -135,12 +135,12 @@ tmConstr [] = do c <- constructor
                  symbol "as"
                  a <- ty
                  return $ TmConstr c tms a
-                   where f = (\x -> if x == [] then [TmVar "#unit"] else x)
+                   where f = (\x -> if x == [] then [TmUnit] else x)
 tmConstr tys = do c <- constructor
                   tms <- liftM f (many (tmAtom tys <|> tm tys))
                   let a = tyFromC c tys
                   return $ TmConstr c tms a
-                    where f = (\x -> if x == [] then [TmVar "#unit"] else x)
+                    where f = (\x -> if x == [] then [TmUnit] else x)
 
 tyFromC :: Constr -> [Type] -> Type
 tyFromC c (ty:[]) = ty
@@ -373,9 +373,10 @@ desugarCCases tmtms = map desugarCCase tmtms
 desugarCCase :: (Term, Term) -> F.Term
 desugarCCase (TmConstr c vs (TyCase ctys), tm) =
   let is = [i | (TmVar i) <- vs]
+      is' = if null is then ["#unit"] else is
       tyis = snd $ (filter (\(c',_) -> if c == c' then True else False) ctys) !! 0
       tm' = desugarTm tm
-      in foldr (\(i,ty) a -> F.TmAbs i (desugarTy ty) a) tm' (zip is tyis)
+      in foldr (\(i,ty) a -> F.TmAbs i (desugarTy ty) a) tm' (zip is' tyis)
 
 
 fix f = x where x = f x
