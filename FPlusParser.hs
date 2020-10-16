@@ -135,12 +135,12 @@ tmConstr [] = do c <- constructor
                  symbol "as"
                  a <- ty
                  return $ TmConstr c tms a
-                   where f = (\x -> if x == [] then [TmUnit] else x)
+                   where f = (\x -> if x == [] then [TmVar "#unit"] else x)
 tmConstr tys = do c <- constructor
                   tms <- liftM f (many (tmAtom tys <|> tm tys))
                   let a = tyFromC c tys
                   return $ TmConstr c tms a
-                    where f = (\x -> if x == [] then [TmUnit] else x)
+                    where f = (\x -> if x == [] then [TmVar "#unit"] else x)
 
 tyFromC :: Constr -> [Type] -> Type
 tyFromC c (ty:[]) = ty
@@ -246,8 +246,7 @@ parseFile' f p = fmap (parse p) (readFile f)
 
 {-============================== DESUGAR PROGS ===============================-}
 desugar :: Prog -> F.Term
-desugar p = desugarTm . desugarProg' $ p
-  where desugarProg' = (\p -> eval (desugarProg p) (M.empty, freshTmVars))
+desugar p = (desugarTm . desugarProg) p
 
 desugarProg :: Prog -> Term
 desugarProg (d:[]) = desugarDecl d
@@ -377,3 +376,14 @@ desugarCCase (TmConstr c vs (TyCase ctys), tm) =
       tyis = snd $ (filter (\(c',_) -> if c == c' then True else False) ctys) !! 0
       tm' = desugarTm tm
       in foldr (\(i,ty) a -> F.TmAbs i (desugarTy ty) a) tm' (zip is tyis)
+
+
+fix f = x where x = f x
+
+foo :: Int -> Bool
+foo 0 = False
+foo n = foo (n-1)
+
+foo' :: (Int -> Bool) -> Int -> Bool
+foo' f 0 = False
+foo' f n = f (n-1)
