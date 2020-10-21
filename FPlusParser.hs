@@ -118,6 +118,20 @@ tmAbs tys = do  symbol "lam"
                 t <- tm tys
                 return $ TmAbs x a t
 
+tmTAbs :: [Type] -> Parser Term
+tmTAbs tys = do symbol "forall"
+                x <- constructor
+                symbol "."
+                t <- tm tys
+                return $ TmTAbs x t
+
+tmTApp :: [Type] -> Parser Term
+tmTApp tys = do t <- tm tys
+                symbol "["
+                a <- ty
+                symbol "]"
+                return $ TmTApp t a
+
 tmLet :: [Type] -> Parser Term
 tmLet tys = do symbol "let"
                itms <- many (do  x <- identifier keywords
@@ -148,7 +162,7 @@ tyFromC c (ty:tys) = if tyInC c ty then ty else tyFromC c tys
 
 tyInC :: Constr -> Type -> Bool
 tyInC c (TyCase ctys) = any (\(c',tys) -> c == c') ctys
-tyInc _ _ = False
+tyInC _ _ = False
 
 tmCase :: [Type] -> Parser Term
 tmCase tys = do symbol "case"
@@ -163,14 +177,33 @@ tmCase tys = do symbol "case"
                 return $ TmCase t tmtms
 
 tmAtom :: [Type] -> Parser Term
-tmAtom tys = tmCase tys <|> tmLet tys <|> tmAbs tys <|> tmUnit <|> tmTrue <|>
-             tmFalse <|> tmConstr tys <|> tmVar <|> parens (tm tys)
+tmAtom tys = tmCase tys <|> tmLet tys <|> tmAbs tys <|> tmTAbs tys <|>
+             tmUnit <|> tmTrue <|> tmFalse <|> tmConstr tys <|>
+             tmVar <|> parens (tm tys)
 
 tmAppOp :: Parser (Term -> Term -> Term)
 tmAppOp = return TmApp
 
+tmTAppOp :: Parser (Term -> Type -> Term)
+tmTAppOp = return TmTApp
+
 tm :: [Type] -> Parser Term
-tm tys = do (tmAtom tys) `chainl1` tmAppOp
+tm tys =  ((chainl1' (tmAtom tys) ty' (tmTAppOp)) <|> (tmAtom tys))
+           `chainl1` (tmAppOp)
+
+ty' :: Parser Type
+ty' = do symbol "["
+         t <- ty
+         symbol "]"
+         return t
+
+chainl1' :: Parser a -> Parser b -> Parser (a -> b -> a) -> Parser a
+chainl1' p1 p2 op = do a <- p1
+                       rest a
+                         where rest a = do f <- op
+                                           b <- p2
+                                           rest (f a b)
+                                        <|> return a
 
 
 {-================================ PARSE DECLS ===============================-}
@@ -195,12 +228,19 @@ dDecl = do symbol "data"
            symbol "="
            c1 <- constructor
            tys1 <- liftM (\x -> if x == [] then [TyUnit] else x) (many ty)
+           let f = (\x -> case x of
+                           (TyVar i) -> if d == i then (TyVar "#R") else x
+                           otherwise -> x)
+           let tys1' = map f tys1
            ctys <- many (do symbol "\n" <|> (symbol "")
                             symbol "|"
                             c <- constructor
-                            tys <- many ty
-                            return (c,tys))
-           return (d, (TyCase ((c1,tys1):ctys)))
+                            tys <- liftM
+                                    (\x -> if x == [] then [TyUnit] else x)
+                                    (many ty)
+                            let tys' = map f tys
+                            return (c,tys'))
+           return (d, (TyCase ((c1,tys1'):ctys)))
 
 
 tytmDecl :: [Type] -> Parser Decl
