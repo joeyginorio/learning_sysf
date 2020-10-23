@@ -107,7 +107,7 @@ type Context = [Binding]
 -- Different kinds of typechecking errors
 data TCError = ErVar Id
              | ErTyVar Id
-             | ErApp1 Term Term
+             | ErApp1 Term Term Type Type
              | ErApp2 Term
              | ErTApp Term
              | ErConstr1 Type
@@ -122,8 +122,9 @@ data TCError = ErVar Id
 instance Show TCError where
   show (ErVar x) = concat ["Variable ", x, " has no binding in the context."]
   show (ErTyVar x) = concat ["Type variable ", x, " has no type."]
-  show (ErApp1 trm1 trm2) = concat [show trm2, " is not a valid input to ",
-                                   show trm1, "."]
+  show (ErApp1 trm1 trm2 ty1 ty2) =
+    concat [show trm2, " is not a valid input to ", show trm1, ". ",
+           show ty2, " does not plug into ", show ty1, "."]
   show (ErApp2 trm) = concat [show trm, " must be an abstraction."]
   show (ErTApp trm) = concat [show trm, " must be a type abstraction."]
   show (ErConstr1 ty) = concat [show ty, " must be a variant type."]
@@ -166,8 +167,8 @@ typeCheck (TmApp tm1 tm2) ctx =
      ty2 <- typeCheck tm2 ctx
      case ty1 of
        (TyAbs ty11 ty12)
-         | ty11 == ty2 -> Right $ ty12
-         | otherwise -> Left $ ErApp1 tm1 tm2
+         | (desugarTy ty11) == ty2 -> Right $ ty12
+         | otherwise -> Left $ ErApp1 tm1 tm2 ty1 ty2
        _ -> Left $ ErApp2 tm1
 typeCheck (TmTAbs i tm) ctx =
   do ty <- typeCheck tm ((TyBind i):ctx)
@@ -191,19 +192,27 @@ typeCheck (TmConstr c tms ty) ctx =
                                                      else x) tys'
                           [] -> Left $ ErConstr3 c ty
        otherwise  -> Left $ ErConstr1 ty
-typeCheck (TmCase tm tmtms) ctx =
-  do ty <- typeCheck tm ctx
-     -- tm1s <- sequence $ map (\tm -> typeCheck tm ctx) ((fst . unzip) tmtms)
-     let ctx1s = map cToContext ((fst . unzip) tmtms)
-     let ctx1tm2s = zip ctx1s ((snd . unzip) tmtms)
-     tm2s <- sequence $ map (\(ctx1,tm2) -> typeCheck tm2 (ctx ++ ctx1)) ctx1tm2s
-     let alleq = all (\x -> x == (tm2s !! 0)) tm2s
-     if not alleq then Left $ ErCase1 else
-       if not (allVarsC . fst . unzip $ tmtms) then Left $ ErCase3 else
-         case ty of
-           (TyCase ctys)
-             | checkMatch ctys tmtms -> Right (tm2s !! 0)
-             | otherwise             -> Left $ ErCase2 tm
+-- typeCheck (TmCase tm tmtms) ctx =
+--   do ty <- typeCheck' tm ctx
+--      -- tm1s <- sequence $ map (\tm -> typeCheck tm ctx) ((fst . unzip) tmtms)
+--      let ctx1s = map cToContext ((fst . unzip) tmtms)
+--      let ctx1tm2s = zip ctx1s ((snd . unzip) tmtms)
+--      tm2s <- sequence $ map (\(ctx1,tm2) -> typeCheck' tm2 (ctx ++ ctx1)) ctx1tm2s
+--      let alleq = all (\x -> x == (tm2s !! 0)) tm2s
+--      if not alleq then Left $ ErCase1 else
+--        if not (allVarsC . fst . unzip $ tmtms) then Left $ ErCase3 else
+--          case ty of
+--            (TyCase ctys)
+--              | checkMatch ctys tmtms -> Right (tm2s !! 0)
+--              | otherwise             -> Left $ ErCase2 tm
+typeCheck (TmCase tm tmtms) ctx = typeCheck (desugarCase tm tmtms) ctx'
+  where ctx' = desugarCtx ctx
+
+
+desugarCtx :: Context -> Context
+desugarCtx [] = []
+desugarCtx (b@(TmBind i t):ctx) = (TmBind i (desugarTy t)):(desugarCtx ctx)
+desugarCtx (b@(TyBind i):ctx) = b:(desugarCtx ctx)
 
 tcLet :: [(Id,Term)] -> Term -> Context -> Either TCError Type
 tcLet [] tm' ctx = typeCheck tm' ctx
@@ -442,32 +451,36 @@ subTypeTerm x ty (TmCase tm tmtms) fvs = TmCase tm' tmtms'
         tmtms' = map subTyTmTms tmtms
 
 -- Evaluate terms, assuming well-typed
-eval :: Term -> Env -> Term
-eval (TmUnit) _ = TmUnit
-eval (TmTrue) _ = TmTrue
-eval (TmFalse) _ = TmFalse
-eval tm@(TmVar _) _ = tm
-eval tm@(TmAbs _ _ _) _ = tm
-eval (TmApp (TmAbs i _ tm1) tm2) e@(_,fvs) = eval (subTerm i tm2 tm1 fvs) e
-eval (TmApp tm1 tm2) env = eval (TmApp tm1' tm2') env
-  where tm1' = eval tm1 env
-        tm2' = eval tm2 env
-eval tm@(TmTAbs _ _) _ = tm
-eval (TmTApp (TmTAbs i tm) ty) (_,fvs) = subTypeTerm i ty tm fvs
-eval (TmTApp tm ty) env = eval (TmTApp tm' ty) env
-  where tm' = eval tm env
-eval (TmLet itms tm) e@(_,fvs) = evalLet itms tm e
-eval (TmConstr c tms ty) env = TmConstr c tms' ty
-  where tms' = map (\tm -> eval tm env) tms
-eval (TmCase tm@(TmTApp (TmTAbs _ (TmConstr _ _ _)) _) tmtms) e@(_,fvs) =
-  eval (desugarCase1 tm tmtms) e
-eval (TmCase (TmTApp tm ty) tmtms) e = eval (TmCase (TmTApp tm' ty) tmtms) e
-  where tm' = eval tm e
-eval t e = t
+eval :: Term -> Term
+eval tm = eval' tm' (Map.empty,freshTmVars)
+  where tm' = desugarTm tm
+
+eval' :: Term -> Env -> Term
+eval' (TmUnit) _ = TmUnit
+eval' (TmTrue) _ = TmTrue
+eval' (TmFalse) _ = TmFalse
+eval' tm@(TmVar _) _ = tm
+eval' tm@(TmAbs _ _ _) _ = tm
+eval' (TmApp (TmAbs i _ tm1) tm2) e@(_,fvs) = eval' (subTerm i tm2 tm1 fvs) e
+eval' (TmApp tm1 tm2) env = eval' (TmApp tm1' tm2') env
+  where tm1' = eval' tm1 env
+        tm2' = eval' tm2 env
+eval' tm@(TmTAbs _ _) _ = tm
+eval' (TmTApp (TmTAbs i tm) ty) (_,fvs) = subTypeTerm i ty tm fvs
+eval' (TmTApp tm ty) env = eval' (TmTApp tm' ty) env
+  where tm' = eval' tm env
+eval' (TmLet itms tm) e@(_,fvs) = evalLet itms tm e
+eval' (TmConstr c tms ty) env = TmConstr c tms' ty
+  where tms' = map (\tm -> eval' tm env) tms
+eval' (TmCase tm@(TmTApp (TmTAbs _ (TmConstr _ _ _)) _) tmtms) e@(_,fvs) =
+  eval' (desugarCase1 tm tmtms) e
+eval' (TmCase (TmTApp tm ty) tmtms) e = eval' (TmCase (TmTApp tm' ty) tmtms) e
+  where tm' = eval' tm e
+eval' t e = t
 
 
 evalLet :: [(Id,Term)] -> Term -> Env -> Term
-evalLet [] tm e = eval tm e
+evalLet [] tm e = eval' tm e
 evalLet ((i,t):xs) tm e@(_,fvs) = evalLet xs' tm' e
   where tm' = subTerm i t tm fvs
         xs' = map (\(i',t') -> (i',subTerm i t t' fvs)) xs
@@ -482,10 +495,15 @@ subTerms ((i,tm'):itms) tm fvs = subTerms itms (subTerm i tm' tm fvs) fvs
 
 
 {- =============================== Desugaring  =================================-}
-
 desugarTy :: Type -> Type
+desugarTy (TyUnit) = TyUnit
+desugarTy (TyBool) = TyBool
+desugarTy (TyVar i) = TyVar i
+desugarTy (TyAbs ty1 ty2) = TyAbs ty1' ty2'
+  where ty1' = desugarTy ty1
+        ty2' = desugarTy ty2
 desugarTy (TyCase ctys) = desugarTyCase ctys
-desugarTy ty = ty
+desugarTy (TyTAbs i ty) = (TyTAbs i (desugarTy ty))
 
 desugarTyCase :: [(Constr, [Type])] -> Type
 desugarTyCase ctys = ty1
@@ -500,6 +518,17 @@ desugarTyCase1 ctys = ty1
         desugarConstr = map (foldr (\x a -> TyAbs x a) (TyVar "#R"))
 
 desugarTm :: Term -> Term
+desugarTm (TmAbs i ty tm) = TmAbs i ty' tm'
+  where ty' = desugarTy ty
+        tm' = desugarTm tm
+desugarTm (TmApp tm1 tm2) = TmApp tm1' tm2'
+  where tm1' = desugarTm tm1
+        tm2' = desugarTm tm2
+desugarTm (TmTAbs i tm) = TmTAbs i tm'
+  where tm' = desugarTm tm
+desugarTm (TmTApp tm ty) = TmTApp tm' ty'
+  where tm' = desugarTm tm
+        ty' = desugarTy ty
 desugarTm (TmLet itms tm) = foldr f tm' itms
   where tm' = desugarTm tm
         right = (\(Right x) -> x)
@@ -510,16 +539,26 @@ desugarTm (TmCase tm tmtms) = desugarCase tm tmtms
 desugarTm tm = tm
 
 desugarConstr :: Constr -> [Term] -> Type -> Term
-desugarConstr c tms (TyCase ctys) = foldl (\a t -> TmApp a (desugarTm t)) tm tms
+desugarConstr c tms ty@(TyCase ctys) = foldl (\a t -> TmApp a (desugarTm t)) tm tms
   where tyas = snd $ (filter (\(c',_) -> if c == c' then True else False) ctys) !! 0
+        tyas' = map (\x -> if x == (TyVar "#R")
+                           then TyTAbs "#R" (desugarTy ty)
+                           else x) tyas
         as = ["a" ++ show i | i <- [0..(length tyas - 1)]]
         tycs = getTycs ctys
         cs = ["c" ++ show i | i <- [0..(length tycs - 1)]]
-        tm = foldr (\(i,t) a -> TmAbs i (desugarTy t) a) tm' (zip as tyas)
+        tm = foldr (\(i,t) a -> TmAbs i (desugarTy t) a) tm' (zip as tyas')
         tm' = TmTAbs "#R" tm''
         tm'' = foldr (\(i,t) a -> TmAbs i (desugarTy t) a) tm''' (zip cs tycs)
         ci = getCi c ctys
-        tm''' = foldl1 TmApp ((TmVar (cs !! ci)):(map TmVar as))
+        as' = map TmVar as
+        cs' = map TmVar cs
+        as'' = map (\(a@(TmVar i), t) -> if t == (TyVar "#R")
+                                         then foldl1
+                                              TmApp
+                                              ((TmTApp a (TyVar "#R")):cs')
+                                         else a) (zip as' tyas)
+        tm''' = foldl1 TmApp ((TmVar (cs !! ci)):as'')
 
 desugarConstr1 :: Constr -> [Term] -> Type -> Term
 desugarConstr1 c tms (TyCase ctys) = foldl (\a t -> TmApp a t) tm tms
@@ -543,9 +582,12 @@ getCi c [] = 0
 getCi c ((c',tys):ctys) = if c == c' then 0 else 1 + getCi c ctys
 
 desugarCase :: Term -> [(Term,Term)] -> Term
-desugarCase (TmTApp (TmConstr c tms tyc) rty) tmtms =
+desugarCase (TmTApp (TmTAbs "#R" (TmConstr c tms tyc)) rty) tmtms =
   let tm = desugarConstr c tms tyc
       cctms = desugarCCases tmtms
+      in foldl TmApp (TmTApp tm (desugarTy rty)) cctms
+desugarCase (TmTApp tm@(TmVar i) rty) tmtms =
+  let cctms = desugarCCases tmtms
       in foldl TmApp (TmTApp tm (desugarTy rty)) cctms
 
 desugarCase1 :: Term -> [(Term,Term)] -> Term

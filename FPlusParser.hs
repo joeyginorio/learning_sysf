@@ -57,7 +57,7 @@ tyUnit = do symbol "Unit"
             return TyUnit
 
 tyBool :: Parser Type
-tyBool = do symbol "Bool"
+tyBool = do symbol "Boolean"
             return TyBool
 
 tyAbsOp :: Parser (Type -> Type -> Type)
@@ -175,7 +175,7 @@ tmCase tys = do symbol "case"
                                   symbol "->"
                                   t2 <- tm tys
                                   (symbol ";" <|> symbol "\n" <|> symbol "")
-                                  return (eval (TmTApp t1 rty) e,t2))
+                                  return (eval' (TmTApp t1 rty) e,t2))
                 return $ TmCase t tmtms
 
 tyFromTmTApp :: Term -> Type
@@ -246,7 +246,6 @@ dDecl = do symbol "data"
                             return (c,tys'))
            return (d, TyTAbs "#R" (TyCase ((c1,tys1'):ctys)))
 
-
 tytmDecl :: [Type] -> Parser Decl
 tytmDecl tys = do tyd <- tyDecl
                   tmd <- tmDecl tys
@@ -289,24 +288,6 @@ parseFile' f p = fmap (parse p) (readFile f)
 
 
 {-============================== DESUGAR PROGS ===============================-}
--- desugar :: Prog -> F.Term
--- desugar p = (desugarTm . desugarProg) p
-
--- desugarProg :: Prog -> Term
--- desugarProg (d:[]) = desugarDecl d
--- desugarProg dds@(d@(Left ((f,_),_)):ds) = TmLet [(f,tm1)] tm2
---   where tm1 = desugarDecl d
---         tm2 = foldr (\(i,t) a -> subTypeTerm i t a fvs) dds' ddecls
---         dds' = desugarDecl $ last dds
---         fvs = freshTmVars
---         ddecls = getDDecl dds
--- desugarProg dds@(d@(Right (_,(f,_),_)):ds) = TmLet [(f,tm1)] tm2
---   where tm1 = desugarDecl d
---         tm2 = foldr (\(i,t) a -> subTypeTerm i t a fvs) dds' ddecls
---         dds' = desugarDecl $ last dds
---         fvs = freshTmVars
---         ddecls = getDDecl dds
-
 desugarProg :: Prog -> Term
 desugarProg ds = foldr (\(i,t) a -> subTypeTerm i t a fvs) p dds
   where dds = getDDecl ds
@@ -337,111 +318,14 @@ tmFromTyTmDecl _ _ tm = tm
 
 buildConstr :: (Constr, [Type]) -> Type -> (Id, Term)
 buildConstr (c,tys) ty = if tmtys == [(TmVar "a0",TyUnit)]
-                         then (c, TmApp (foldr f
-                                         (TmTAbs "#R" $ TmConstr c tms ty)
-                                         tmtys)
-                                         TmUnit)
-                         else (c, foldr f (TmTAbs "#R" $ TmConstr c tms ty) tmtys)
+                         then (c, TmApp (desugarConstr c [] ty) TmUnit)
+                         else (c, desugarConstr c [] ty)
   where tys' = map (\x -> if x == (TyVar "#R")
                           then TyTAbs "#R" ty
                           else x) tys
         tms = [TmVar i | i <- vs]
         vs = ["a" ++ show i | i <- [0..(length tys - 1)]]
-        f = (\((TmVar i),ty) a -> TmAbs i ty a)
         tmtys = zip tms tys'
 
 buildConstrs :: [(Constr, [Type])] -> Type -> [(Id,Term)]
 buildConstrs ctys ty = map (\x -> buildConstr x ty) ctys
-
-desugarFTy :: Type -> F.Type
-desugarFTy TyUnit = F.TyUnit
-desugarFTy TyBool = F.TyBool
-desugarFTy (TyVar i) = F.TyVar i
-desugarFTy (TyAbs ty1 ty2) = F.TyAbs ty1' ty2'
-  where ty1' = desugarFTy ty1
-        ty2' = desugarFTy ty2
-desugarFTy (TyTAbs i ty) = F.TyTAbs i ty'
-  where ty' = desugarFTy ty
-desugarFTy (TyCase ctys) = desugarFTyCase ctys
-
-desugarFTyCase :: [(Constr, [Type])] -> F.Type
-desugarFTyCase ctys = F.TyTAbs "#R" ty1
-  where ty1 = foldr (\x a -> F.TyAbs x a) (F.TyVar "#R") ty1'
-        ty1' = desugarConstr ((snd . unzip) ctys)
-        desugarConstr = map (foldr (\x a -> F.TyAbs (desugarFTy x) a) (F.TyVar "#R"))
-
-desugarFTm :: Term -> F.Term
-desugarFTm TmUnit = F.TmUnit
-desugarFTm TmTrue = F.TmTrue
-desugarFTm TmFalse = F.TmFalse
-desugarFTm (TmVar i) = F.TmVar i
-desugarFTm (TmAbs i ty tm) = F.TmAbs i ty' tm'
-  where ty' = desugarFTy ty
-        tm' = desugarFTm tm
-desugarFTm (TmApp tm1 tm2) = F.TmApp tm1' tm2'
-  where tm1' = desugarFTm tm1
-        tm2' = desugarFTm tm2
-desugarFTm (TmTAbs i tm) = F.TmTAbs i tm'
-  where tm' = desugarFTm tm
-desugarFTm (TmTApp tm ty) = F.TmTApp tm' ty'
-  where tm' = desugarFTm tm
-        ty' = desugarFTy ty
-desugarFTm (TmLet itms tm) = foldr f tm' itms
-  where tm' = desugarFTm tm
-        right = (\(Right x) -> x)
-        typeCheck' = (\t -> desugarFTy (right (typeCheck t [])))
-        f = (\(i,t) a -> F.TmApp (F.TmAbs i (typeCheck' t) a) (desugarFTm t))
-desugarFTm (TmConstr c tms ty) = desugarFConstr c tms ty
-desugarFTm (TmCase tm tmtms) = desugarFCase tm tmtms
-
-
-desugarFConstr :: Constr -> [Term] -> Type -> F.Term
-desugarFConstr c tms (TyCase ctys) = foldl (\a t -> F.TmApp a (desugarFTm t)) tm tms
-  where tyas = snd $ (filter (\(c',_) -> if c == c' then True else False) ctys) !! 0
-        as = ["a" ++ show i | i <- [0..(length tyas - 1)]]
-        tycs = getTycs ctys
-        cs = ["c" ++ show i | i <- [0..(length tycs - 1)]]
-        tm = foldr (\(i,t) a -> F.TmAbs i (desugarFTy t) a) tm' (zip as tyas)
-        tm' = F.TmTAbs "#R" tm''
-        tm'' = foldr (\(i,t) a -> F.TmAbs i (desugarFTy t) a) tm''' (zip cs tycs)
-        ci = getCi c ctys
-        tm''' = foldl1 F.TmApp ((F.TmVar (cs !! ci)):(map F.TmVar as))
-
-desugarFCase :: Term -> [(Term,Term)] -> F.Term
-desugarFCase dtm tmtms@((TmConstr _ _ ty@(TyCase ctys),rtm):tmtms') =
-  let dty = desugarFTy ty
-      dtm' = desugarFTm dtm
-      tycs = getTycs ctys
-      cs = ["c" ++ show i | i <- [0..(length tycs - 1)]]
-      tm = F.TmAbs "#D" dty tm'
-      tm' = F.TmTAbs "#R" tm''
-      tm'' = foldr (\(i,t) a -> F.TmAbs i (desugarFTy t) a) tm'''' (zip cs tycs)
-      tm''' = (F.TmTApp (F.TmVar "#D") (F.TyVar "#R"))
-      tm'''' = foldl F.TmApp tm''' (map F.TmVar cs)
-      right = (\(Right x) -> x)
-      ctx = [TmBind i ty | (TmVar i) <- [dtm]]
-      rty = desugarFTy $ right (typeCheck (TmCase dtm tmtms) ctx)
-      cctms = desugarFCCases tmtms
-      in foldl F.TmApp (F.TmTApp (F.TmApp tm dtm') rty) cctms
-
-desugarFCCases :: [(Term, Term)] -> [F.Term]
-desugarFCCases tmtms = map desugarFCCase tmtms
-
-desugarFCCase :: (Term, Term) -> F.Term
-desugarFCCase (TmConstr c vs (TyCase ctys), tm) =
-  let is = [i | (TmVar i) <- vs]
-      is' = if null is then ["#unit"] else is
-      tyis = snd $ (filter (\(c',_) -> if c == c' then True else False) ctys) !! 0
-      tm' = desugarFTm tm
-      in foldr (\(i,ty) a -> F.TmAbs i (desugarFTy ty) a) tm' (zip is' tyis)
-
-
-fix f = x where x = f x
-
-foo :: Int -> Bool
-foo 0 = False
-foo n = foo (n-1)
-
-foo' :: (Int -> Bool) -> Int -> Bool
-foo' f 0 = False
-foo' f n = f (n-1)
