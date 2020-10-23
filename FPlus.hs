@@ -29,6 +29,7 @@ data Term = TmUnit
           | TmLet [(Id,Term)] Term
           | TmConstr Constr [Term] Type
           | TmCase Term [(Term, Term)]
+          | TmLSpec [Example] Type
           deriving (Eq)
 
 -- For pretty printing terms
@@ -53,6 +54,7 @@ showTm (TmConstr c tms ty) = text c <+> text " " <+> sepby " " (map showTm tms)
                              <+> text " as " <+> showTy ty
 showTm (TmCase tm tmtms) = text "case " <+> showTm tm <+> text " of" <+>
                            (nest 3 $ line <+> showTmCase tmtms)
+showTm (TmLSpec xs ty) = parens $ ((text (show xs)) <+> text " :: " <+> showTy ty)
 
 showTmLet :: [(Id,Term)] -> Doc
 showTmLet [] = nil
@@ -94,6 +96,20 @@ showTyCase ((c,ts):[]) = parens (text c <+> text ":" <+> ts')
 showTyCase ((c,ts):cts) = parens (text c <+> text ":" <+> ts') <+> text "+" <+>
                           showTyCase cts
                           where ts' = sepby "*" (map showTy ts)
+
+
+data Example = Out Term
+             | InTm Term Example
+             | InTy Type Example
+             deriving (Eq)
+
+instance Show Example where
+  show e =
+    let show' (Out t) = "tm: " ++ show t
+        show' (InTm t e) = "tm: " ++ show t ++ "," ++ show' e
+        show' (InTy t e) = "ty: " ++ show t ++ "," ++ show' e
+        in "<" ++ show' e ++ ">"
+
 
 
 {- =============================== Typing  =================================-}
@@ -167,7 +183,7 @@ typeCheck (TmApp tm1 tm2) ctx =
      ty2 <- typeCheck tm2 ctx
      case ty1 of
        (TyAbs ty11 ty12)
-         | (desugarTy ty11) == ty2 -> Right $ ty12
+         | (desugarTy ty11) == (desugarTy ty2) -> Right $ ty12
          | otherwise -> Left $ ErApp1 tm1 tm2 ty1 ty2
        _ -> Left $ ErApp2 tm1
 typeCheck (TmTAbs i tm) ctx =
@@ -192,22 +208,8 @@ typeCheck (TmConstr c tms ty) ctx =
                                                      else x) tys'
                           [] -> Left $ ErConstr3 c ty
        otherwise  -> Left $ ErConstr1 ty
--- typeCheck (TmCase tm tmtms) ctx =
---   do ty <- typeCheck' tm ctx
---      -- tm1s <- sequence $ map (\tm -> typeCheck tm ctx) ((fst . unzip) tmtms)
---      let ctx1s = map cToContext ((fst . unzip) tmtms)
---      let ctx1tm2s = zip ctx1s ((snd . unzip) tmtms)
---      tm2s <- sequence $ map (\(ctx1,tm2) -> typeCheck' tm2 (ctx ++ ctx1)) ctx1tm2s
---      let alleq = all (\x -> x == (tm2s !! 0)) tm2s
---      if not alleq then Left $ ErCase1 else
---        if not (allVarsC . fst . unzip $ tmtms) then Left $ ErCase3 else
---          case ty of
---            (TyCase ctys)
---              | checkMatch ctys tmtms -> Right (tm2s !! 0)
---              | otherwise             -> Left $ ErCase2 tm
 typeCheck (TmCase tm tmtms) ctx = typeCheck (desugarCase tm tmtms) ctx'
   where ctx' = desugarCtx ctx
-
 
 desugarCtx :: Context -> Context
 desugarCtx [] = []
@@ -495,6 +497,9 @@ subTerms ((i,tm'):itms) tm fvs = subTerms itms (subTerm i tm' tm fvs) fvs
 
 
 {- =============================== Desugaring  =================================-}
+
+
+
 desugarTy :: Type -> Type
 desugarTy (TyUnit) = TyUnit
 desugarTy (TyBool) = TyBool

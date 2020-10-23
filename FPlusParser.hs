@@ -49,7 +49,6 @@ type TyDecl = (String, Type)
 type TmDecl = (String, [String], Term)
 type DDecl = (String, Type)
 
-
 {-================================ PARSE TYPES ===============================-}
 
 tyUnit :: Parser Type
@@ -208,6 +207,35 @@ chainl1' p1 p2 op = do a <- p1
                                            b <- p2
                                            rest (f a b)
                                         <|> return a
+
+
+{-============================= PARSE EXAMPLES ===============================-}
+tmLSpec :: Parser Term
+tmLSpec = do symbol "("
+             xs <- exs
+             symbol "::"
+             t <- ty
+             symbol ")"
+             return $ TmLSpec xs t
+
+exs :: Parser [Example]
+exs = do symbol "["
+         xs <- sepby ex (symbol ",")
+         symbol "]"
+         return xs
+
+ex :: Parser Example
+ex = do symbol "<"
+        xs <- sepby ((do {t <- tm []; return $ Left t}) <|>
+                     (do {symbol "["; t <- ty; symbol "]"; return $ Right t}))
+              (symbol ",")
+        symbol ">"
+        return $ toExample xs
+
+toExample :: [Either Term Type] -> Example
+toExample ((Left tm):[]) = Out tm
+toExample ((Left tm):xs) = InTm tm (toExample xs)
+toExample ((Right ty):xs) = InTy ty (toExample xs)
 
 
 {-================================ PARSE DECLS ===============================-}

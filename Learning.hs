@@ -7,7 +7,7 @@ Chapter 3 and 4 of "Learning in System F".
 
 module Learning where
 
-import SystemF
+import F
 import qualified Data.Map as Map
 import qualified Data.List as List
 import qualified Data.Set as Set
