@@ -46,8 +46,9 @@ type Prog = [Decl]
 
 type Decl = Either (TyDecl, TmDecl) ([DDecl], TyDecl, TmDecl)
 type TyDecl = (String, Type)
-type TmDecl = (String, [String], Term)
+type TmDecl = (String, [String], Either Term [Example])
 type DDecl = (String, Type)
+
 
 {-================================ PARSE TYPES ===============================-}
 
@@ -210,27 +211,28 @@ chainl1' p1 p2 op = do a <- p1
 
 
 {-============================= PARSE EXAMPLES ===============================-}
-tmLSpec :: Parser Term
-tmLSpec = do symbol "("
-             xs <- exs
-             symbol "::"
-             t <- ty
-             symbol ")"
-             return $ TmLSpec xs t
 
-exs :: Parser [Example]
-exs = do symbol "["
-         xs <- sepby ex (symbol ",")
-         symbol "]"
-         return xs
+tmLSpec :: [Type] -> Parser Term
+tmLSpec tys = do symbol "("
+                 xs <- exs tys
+                 symbol "::"
+                 t <- ty
+                 symbol ")"
+                 return $ TmLSpec xs t
 
-ex :: Parser Example
-ex = do symbol "<"
-        xs <- sepby ((do {t <- tm []; return $ Left t}) <|>
-                     (do {symbol "["; t <- ty; symbol "]"; return $ Right t}))
-              (symbol ",")
-        symbol ">"
-        return $ toExample xs
+exs :: [Type] -> Parser [Example]
+exs tys = do symbol "["
+             xs <- sepby (ex tys) (symbol ",")
+             symbol "]"
+             return xs
+
+ex :: [Type] -> Parser Example
+ex tys = do symbol "<"
+            xs <- sepby ((do {t <- tm tys; return $ Left t}) <|>
+                         (do {symbol "["; t <- ty; symbol "]"; return $ Right t}))
+                  (symbol ",")
+            symbol ">"
+            return $ toExample xs
 
 toExample :: [Either Term Type] -> Example
 toExample ((Left tm):[]) = Out tm
@@ -247,12 +249,17 @@ tyDecl = do allSpace
             return (f,a)
 
 tmDecl :: [Type] -> Parser TmDecl
-tmDecl tys = do allSpace
-                f <- identifier keywords
-                ps <- many (identifier keywords)
-                symbol "="
-                t <- tm tys
-                return (f,ps,t)
+tmDecl tys = (do allSpace
+                 f <- identifier keywords
+                 ps <- many (identifier keywords)
+                 symbol "="
+                 t <- tm tys
+                 return (f,ps,Left t)) <|>
+             (do allSpace
+                 f <- identifier keywords
+                 symbol "="
+                 xs <- exs tys
+                 return (f,[],Right xs))
 
 dDecl :: Parser DDecl
 dDecl = do symbol "data"
@@ -276,7 +283,7 @@ dDecl = do symbol "data"
 
 tytmDecl :: [Type] -> Parser Decl
 tytmDecl tys = do tyd <- tyDecl
-                  tmd <- tmDecl tys
+                  tmd <- (tmDecl tys)
                   return $ Left (tyd,tmd)
 
 dtytmDecl :: [Type] -> Parser Decl
@@ -330,8 +337,10 @@ getDDecl ((Right (d,_,_)):ds) = d ++ getDDecl ds
 getDDecl ((Left d):ds) = getDDecl ds
 
 desugarDecl :: Decl -> [(Id,Term)]
-desugarDecl (Left ((_,ty),(f,as,tm))) = [(f,tm')]
+desugarDecl (Left ((_,ty),(f,as,Left tm))) = [(f,tm')]
   where tm' = tmFromTyTmDecl ty as tm
+desugarDecl (Left ((_,ty),(f,as,Right xs))) = [(f,tm')]
+  where tm' = TmLSpec xs ty
 desugarDecl (Right (ds,tyd,tmd)) = itmd ++ itmtytm
   where itmtytm = desugarDecl $ Left (tyd,tmd)
         itmd = concat $ map tmFromDDecl ds
