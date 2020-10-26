@@ -451,6 +451,26 @@ subTypeTerm x ty (TmCase tm tmtms) fvs = TmCase tm' tmtms'
   where tm' = subTypeTerm x ty tm fvs
         subTyTmTms = (\(s,t) -> (subTypeTerm x ty s fvs, subTypeTerm x ty t fvs))
         tmtms' = map subTyTmTms tmtms
+subTypeTerm x ty (TmLSpec exs ty') fvs = TmLSpec exs' ty''
+  where exs' = subTypeExs x ty exs fvs
+        ty'' = subType x ty ty' fvs
+
+subTypeExs :: Id -> Type -> [Example] -> [Id] -> [Example]
+subTypeExs x ty [] fvs = []
+subTypeExs x ty (ex:exs) fvs = ex':exs'
+  where ex' = subTypeEx x ty ex fvs
+        exs' = subTypeExs x ty exs fvs
+
+subTypeEx :: Id -> Type -> Example -> [Id] -> Example
+subTypeEx x ty (Out tm) fvs = Out (subTypeTerm x ty tm fvs)
+subTypeEx x ty (InTm tm ex) fvs = (InTm tm' ex')
+  where tm' = subTypeTerm x ty tm fvs
+        ex' = subTypeEx x ty ex fvs
+subTypeEx x ty (InTy ty' ex) fvs = (InTy ty'' ex')
+  where ty'' = subType x ty ty' fvs
+        ex' = subTypeEx x ty ex fvs
+
+
 
 -- Evaluate terms, assuming well-typed
 eval :: Term -> Term
