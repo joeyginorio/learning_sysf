@@ -132,6 +132,7 @@ data TCError = ErVar Id
              | ErCase1
              | ErCase2 Term
              | ErCase3
+             | ErExample
              deriving (Eq)
 
 -- For pretty printing errors
@@ -150,6 +151,7 @@ instance Show TCError where
   show (ErCase1) = concat ["Outputs of pattern match must match type."]
   show (ErCase2 tm) = concat ["Incomplete pattern match for ", show tm, "."]
   show (ErCase3) = concat ["Arguments to constructors must be variables."]
+  show (ErExample) = concat ["Examples do not typecheck."]
 
 -- Extract id from a binding
 idFromBinding :: Binding -> Id
@@ -210,6 +212,38 @@ typeCheck (TmConstr c tms ty) ctx =
        otherwise  -> Left $ ErConstr1 ty
 typeCheck (TmCase tm tmtms) ctx = typeCheck (desugarCase tm tmtms) ctx'
   where ctx' = desugarCtx ctx
+typeCheck (TmLSpec exs ty) ctx = tcExamples exs ty ctx
+
+tcExamples :: [Example] -> Type -> Context -> Either TCError Type
+tcExamples exs tyt ctx =
+  do tys <- sequence $ map (\x -> tcExample x tyt tyt ctx) exs
+     return $ tys !! 0
+
+tcExample :: Example -> Type -> Type -> Context -> Either TCError Type
+tcExample (Out tm) tyr tyt ctx = do ty' <- typeCheck tm ctx
+                                    if ty' `betaEqualTy` tyr
+                                      then Right tyt
+                                      else Left ErExample
+tcExample (InTm tm ex) (TyAbs ty1 ty2) tyt ctx =
+  do ty' <- typeCheck tm ctx
+     if ty' `betaEqualTy` ty1
+       then (tcExample ex ty2 tyt ctx)
+       else Left ErExample
+tcExample (InTy ty ex) (TyTAbs i ty') tyt ctx = tcExample ex ty'' tyt ctx
+  where ty'' = subType i ty ty' freshTyVars
+tcExample e _ _ _ = Left ErExample
+
+-- Beta equality of types
+betaEqualTy :: Type -> Type -> Bool
+betaEqualTy ty1 ty2 = betaEqualTy' (desugarTy ty1) (desugarTy ty2) freshTyVars
+
+betaEqualTy' :: Type -> Type -> [Id] -> Bool
+betaEqualTy' ty1@(TyTAbs i1 typ1) ty2@(TyTAbs i2 typ2) (i:is) =
+  let (TyTAbs _ typ1') = replaceTyVar i1 i ty1
+      (TyTAbs _ typ2') = replaceTyVar i2 i ty2
+      in betaEqualTy' typ1' typ2' is
+betaEqualTy' typ1 typ2 _ = typ1 == typ2
+
 
 desugarCtx :: Context -> Context
 desugarCtx [] = []
