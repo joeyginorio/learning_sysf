@@ -271,7 +271,8 @@ eval :: Term -> Env -> Term
 eval (TmUnit) _ = TmUnit
 eval (TmTrue) _ = TmTrue
 eval (TmFalse) _ = TmFalse
-eval trm@(TmVar _) _ = trm
+eval trm@(TmVar i) (m,fvs) = val
+  where (Left val) = Map.findWithDefault (Left trm) i m
 eval trm@(TmAbs _ _ _) _ = trm
 eval (TmApp (TmAbs i _ trm1) trm2) e@(_,fvs) = eval (subTerm i trm2 trm1 fvs) e
 eval (TmApp trm1 trm2) env = eval (TmApp trm1' trm2') env
