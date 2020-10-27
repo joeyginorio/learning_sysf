@@ -11,6 +11,7 @@ module FPlus where
 import PPrinter
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import qualified Learning as L
 import qualified F as F
 
 {- ========================= Syntax of Terms & Types =========================-}
@@ -593,6 +594,11 @@ desugarTm (TmConstr c tms ty) = desugarConstr c tms ty
 desugarTm (TmCase tm tmtms) = desugarCase tm tmtms
 desugarTm tm = tm
 
+desugarEx :: Example -> Example
+desugarEx (Out tm) = (Out (desugarTm tm))
+desugarEx (InTm tm ex) = (InTm (desugarTm tm) (desugarEx ex))
+desugarEx (InTy ty ex) = (InTy (desugarTy ty) (desugarEx ex))
+
 desugarConstr :: Constr -> [Term] -> Type -> Term
 desugarConstr c tms ty@(TyCase ctys) = foldl (\a t -> TmApp a (desugarTm t)) tm tms
   where tyas = snd $ (filter (\(c',_) -> if c == c' then True else False) ctys) !! 0
@@ -643,3 +649,102 @@ desugarCCase (TmConstr c vs (TyCase ctys), tm) =
       tyis = snd $ (filter (\(c',_) -> if c == c' then True else False) ctys) !! 0
       tm' = desugarTm tm
       in foldr (\(i,ty) a -> TmAbs i (desugarTy ty) a) tm' (zip is' tyis)
+
+desugarFTy :: Type -> F.Type
+desugarFTy TyUnit = F.TyUnit
+desugarFTy TyBool = F.TyBool
+desugarFTy (TyVar i) = F.TyVar i
+desugarFTy (TyAbs ty1 ty2) = F.TyAbs ty1' ty2'
+  where ty1' = desugarFTy ty1
+        ty2' = desugarFTy ty2
+desugarFTy (TyTAbs i ty) = F.TyTAbs i ty'
+  where ty' = desugarFTy ty
+desugarFTy ty@(TyCase ctys) = desugarFTy ty'
+  where ty' = desugarTy ty
+
+desugarFTm :: Term -> F.Term
+desugarFTm TmUnit = F.TmUnit
+desugarFTm TmTrue = F.TmTrue
+desugarFTm TmFalse = F.TmFalse
+desugarFTm (TmVar i) = F.TmVar i
+desugarFTm (TmAbs i ty tm) = F.TmAbs i ty' tm'
+  where ty' = desugarFTy ty
+        tm' = desugarFTm tm
+desugarFTm (TmApp tm1 tm2) = F.TmApp tm1' tm2'
+  where tm1' = desugarFTm tm1
+        tm2' = desugarFTm tm2
+desugarFTm (TmTAbs i tm) = F.TmTAbs i tm'
+  where tm' = desugarFTm tm
+desugarFTm (TmTApp tm ty) = F.TmTApp tm' ty'
+  where tm' = desugarFTm tm
+        ty' = desugarFTy ty
+desugarFTm (TmLet itms tm) = desugarFTm tm'
+  where tm' = desugarTm (TmLet itms tm)
+desugarFTm (TmConstr c tms ty) = desugarFTm tm'
+  where tm' = desugarTm (TmConstr c tms ty)
+desugarFTm (TmCase tm tmtms) = desugarFTm tm'
+  where tm' = desugarTm (TmCase tm tmtms)
+
+
+sugarTy :: F.Type -> Type
+sugarTy F.TyUnit = TyUnit
+sugarTy F.TyBool = TyBool
+sugarTy (F.TyVar i) = TyVar i
+sugarTy (F.TyAbs ty1 ty2) = TyAbs ty1' ty2'
+  where ty1' = sugarTy ty1
+        ty2' = sugarTy ty2
+sugarTy (F.TyTAbs i ty) = TyTAbs i ty'
+  where ty' = sugarTy ty
+
+sugarTm :: F.Term -> Term
+sugarTm F.TmUnit = TmUnit
+sugarTm F.TmTrue = TmTrue
+sugarTm F.TmFalse = TmFalse
+sugarTm (F.TmVar i) = TmVar i
+sugarTm (F.TmAbs i ty tm) = TmAbs i (sugarTy ty) (sugarTm tm)
+sugarTm (F.TmApp tm1 tm2) = TmApp (sugarTm tm1) (sugarTm tm2)
+sugarTm (F.TmTAbs i tm) = TmTAbs i (sugarTm tm)
+sugarTm (F.TmTApp tm ty) = TmTApp (sugarTm tm) (sugarTy ty)
+
+
+{- =============================== Learning  =================================-}
+
+learn :: Term -> Term
+learn tm = learn' tm ([],(Map.empty,freshTmVars))
+
+learn' :: Term -> (Context,Env) -> Term
+learn' TmUnit cenv = TmUnit
+learn' TmTrue cenv = TmTrue
+learn' TmFalse cenv = TmFalse
+learn' (TmVar i) cenv = (TmVar i)
+learn' (TmAbs i ty tm) cenv = TmAbs i ty (learn' tm cenv)
+learn' (TmApp tm1@(TmAbs i ty tm) tm2) (ctx,(m,fvs)) = TmApp tm1' tm2'
+  where cenv = ((TmBind i ty):ctx, (Map.insert i (Left tm2) m, fvs))
+        tm1' = learn' tm1 cenv
+        tm2' = learn' tm2 (ctx,(m,fvs))
+learn' (TmApp tm1 tm2) cenv = TmApp (learn' tm1 cenv) (learn' tm2 cenv)
+learn' (TmTAbs i tm) cenv = TmTAbs i (learn' tm cenv)
+learn' (TmTApp tm@(TmTAbs i tm') ty) (ctx,(m,fvs)) = TmTApp tm' ty
+  where cenv = ((TyBind i):ctx, (Map.insert i (Right ty) m, fvs))
+        tm' = learn' tm cenv
+learn' (TmTApp tm ty) cenv = TmTApp (learn' tm cenv) ty
+learn' (TmLet itms tm) cenv = TmLet itms' tm'
+  where fitms = learnItms itms cenv
+        itms' = fst fitms
+        tm' = learn' tm (snd fitms)
+learn' (TmCase tm tmtms) cenv = TmCase tm' tmtms'
+  where tm' = learn' tm cenv
+        tmtms' = map (\(tm1,tm2) -> (learn' tm1 cenv, learn' tm2 cenv)) tmtms
+learn' (TmConstr c tms ty) cenv = TmConstr c tms' ty
+  where tms' = map (\x -> learn' x cenv) tms
+
+
+learnItms :: [(Id,Term)] -> (Context,Env) -> ([(Id,Term)], (Context,Env))
+learnItms [] cenv = ([], cenv)
+learnItms ((i,tm):itms) cenv@(ctx,(m,fvs)) = ((i,tm'):itms', cenv')
+  where itms' = fst (learnItms itms cenv')
+        tm' = learn' tm cenv
+        (Right ty) = typeCheck tm ctx
+        ctx' = (TmBind i ty):ctx
+        m' = Map.insert i (Left tm') m
+        cenv' = (ctx',(m',fvs))
