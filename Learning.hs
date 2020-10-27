@@ -317,27 +317,26 @@ extractCtx (TmTApp trm typ) = extractCtx trm
 extractCtx trm = []
 
 -- Checks that a list of terms is beta equivalent to list of outputs
-checkEx :: [Term] -> [Term] -> Bool
-checkEx trms outs =
+checkEx :: [Term] -> [Term] -> Env -> Bool
+checkEx trms outs env =
   let trmouts = zip trms outs
       fvs = freshTmVars
-      env = (Map.empty, fvs)
       in all (\(trm,out) -> betaEqualTm (eval trm env) out fvs) trmouts
 
 -- Learn terms from types and examples
-lrnTerms :: Type -> [Example] -> Context  -> [Term] -> Int -> [Term]
-lrnTerms typ exs ctx ltrms 0 = []
-lrnTerms typ exs ctx [] n =
+lrnTerms :: Type -> [Example] -> Context -> Env -> [Term] -> Int -> [Term]
+lrnTerms typ exs ctx env ltrms 0 = []
+lrnTerms typ exs ctx env [] n =
   let holes = replicate (length exs) (TmVar "$HOLE")
-      in lrnTerms typ exs ctx holes n
-lrnTerms typ exs@((Out _):_) ctx ltrms n =
+      in lrnTerms typ exs ctx env holes n
+lrnTerms typ exs@((Out _):_) ctx env ltrms n =
   let ctx' = (extractCtx (extractAbs (ltrms !! 0))) ++ ctx
       htrms = genITerms typ ctx' n
       ltrms' = [[badSubTm "$HOLE" htrm ltrm | ltrm <- ltrms] |
                                               htrm <- htrms]
       otrms = [trm | (Out trm) <- exs]
-      in [extractAbs trm | t@(trm:trms) <- ltrms', checkEx t otrms]
-lrnTerms (TyAbs typ1 typ2) exs@((InTm _ _):_) ctx ltrms n =
+      in [extractAbs trm | t@(trm:trms) <- ltrms', checkEx t otrms env]
+lrnTerms (TyAbs typ1 typ2) exs@((InTm _ _):_) ctx env ltrms n =
   let i = "x" ++ show n
       strm = TmAbs i typ1 (TmVar "$HOLE")
       ftrms = [subTerm "$HOLE" strm ltrm freshTmVars | ltrm <- ltrms]
@@ -345,14 +344,27 @@ lrnTerms (TyAbs typ1 typ2) exs@((InTm _ _):_) ctx ltrms n =
       ltrms' = zipWith TmApp ftrms itrms
       exs' = [ex | (InTm _ ex) <- exs]
       sztyp = sizeType typ1
-      in lrnTerms typ2 exs' ctx ltrms' (n-1-sztyp)
-lrnTerms (TyTAbs i typ) exs@((InTy _ _):_) ctx ltrms n =
+      in lrnTerms typ2 exs' ctx env ltrms' (n-1-sztyp)
+lrnTerms (TyTAbs i typ) exs@((InTy _ _):_) ctx env ltrms n =
   let strm = TmTAbs i (TmVar "$HOLE")
       ftrms = [subTerm "$HOLE" strm ltrm freshTmVars | ltrm <- ltrms]
       ityps = [typ | (InTy typ _) <- exs]
       ltrms' = zipWith TmTApp ftrms ityps
       exs' = [ex | (InTy _ ex) <- exs]
-      in lrnTerms typ exs' ctx ltrms' (n-1)
+      in lrnTerms typ exs' ctx env ltrms' (n-1)
 
-learnTerms :: Type -> [Example] -> Context -> Int -> [Term]
-learnTerms typ exs ctx n = foldr (++) [] [lrnTerms typ exs ctx [] n' | n' <- [0..n]]
+learnTerms :: Type -> [Example] -> Context -> Env -> Int -> [Term]
+learnTerms typ exs ctx env n = foldr
+                               (++)
+                               []
+                               [lrnTerms typ exs ctx env [] n' | n' <- [0..n]]
+
+
+learnTerm :: Type -> [Example] -> Context -> Env -> Term
+learnTerm typ exs ctx env = getTm [lrnTerms typ exs ctx env [] n | n <- [0..]]
+
+-- In a list of lists of terms, extracts first term
+getTm :: [[Term]] -> Term
+getTm xxs@(x:xs) = case (head . take 1) xxs of
+                     [] -> getTm xs
+                     _  -> (head . take 1) x
