@@ -351,6 +351,7 @@ tmFromDDecl (f,(TyTAbs "#R" ty@(TyCase ctys))) = buildConstrs ctys ty
 
 tmFromTyTmDecl :: Type -> [Id] -> Term -> Term
 tmFromTyTmDecl (TyAbs ty1 ty2) (a:as) tm = TmAbs a ty1 (tmFromTyTmDecl ty2 as tm)
+tmFromTyTmDecl (TyTAbs i ty1) (a:as) tm = TmTAbs i (tmFromTyTmDecl ty1 (a:as) tm)
 tmFromTyTmDecl _ _ tm = tm
 
 buildConstr :: (Constr, [Type]) -> Type -> (Id, Term)

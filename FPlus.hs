@@ -251,6 +251,11 @@ desugarCtx [] = []
 desugarCtx (b@(TmBind i t):ctx) = (TmBind i (desugarTy t)):(desugarCtx ctx)
 desugarCtx (b@(TyBind i):ctx) = b:(desugarCtx ctx)
 
+desugarFCtx :: Context -> F.Context
+desugarFCtx [] = []
+desugarFCtx (b@(TmBind i t):ctx) = (F.TmBind i (desugarFTy t)):(desugarFCtx ctx)
+desugarFCtx (b@(TyBind i):ctx) = (F.TyBind i):(desugarFCtx ctx)
+
 tcLet :: [(Id,Term)] -> Term -> Context -> Either TCError Type
 tcLet [] tm' ctx = typeCheck tm' ctx
 tcLet ((i,tm):itms) tm' ctx = do t <- typeCheck tm ctx
@@ -516,7 +521,8 @@ eval' :: Term -> Env -> Term
 eval' (TmUnit) _ = TmUnit
 eval' (TmTrue) _ = TmTrue
 eval' (TmFalse) _ = TmFalse
-eval' tm@(TmVar _) _ = tm
+eval' tm@(TmVar i) (m,fvs) = val
+  where (Left val) = Map.findWithDefault (Left tm) i m
 eval' tm@(TmAbs _ _ _) _ = tm
 eval' (TmApp (TmAbs i _ tm1) tm2) e@(_,fvs) = eval' (subTerm i tm2 tm1 fvs) e
 eval' (TmApp tm1 tm2) env = eval' (TmApp tm1' tm2') env
@@ -594,10 +600,21 @@ desugarTm (TmConstr c tms ty) = desugarConstr c tms ty
 desugarTm (TmCase tm tmtms) = desugarCase tm tmtms
 desugarTm tm = tm
 
+desugarExs :: [Example] -> [Example]
+desugarExs exs = map desugarEx exs
+
 desugarEx :: Example -> Example
 desugarEx (Out tm) = (Out (desugarTm tm))
 desugarEx (InTm tm ex) = (InTm (desugarTm tm) (desugarEx ex))
 desugarEx (InTy ty ex) = (InTy (desugarTy ty) (desugarEx ex))
+
+desugarFExs :: [Example] -> [L.Example]
+desugarFExs exs = map desugarFEx exs
+
+desugarFEx :: Example -> L.Example
+desugarFEx (Out tm) = (L.Out (desugarFTm tm))
+desugarFEx (InTm tm ex) = (L.InTm (desugarFTm tm) (desugarFEx ex))
+desugarFEx (InTy ty ex) = (L.InTy (desugarFTy ty) (desugarFEx ex))
 
 desugarConstr :: Constr -> [Term] -> Type -> Term
 desugarConstr c tms ty@(TyCase ctys) = foldl (\a t -> TmApp a (desugarTm t)) tm tms
@@ -737,7 +754,15 @@ learn' (TmCase tm tmtms) cenv = TmCase tm' tmtms'
         tmtms' = map (\(tm1,tm2) -> (learn' tm1 cenv, learn' tm2 cenv)) tmtms
 learn' (TmConstr c tms ty) cenv = TmConstr c tms' ty
   where tms' = map (\x -> learn' x cenv) tms
+learn' (TmLSpec exs ty) (ctx,(m,fvs)) = sugarTm (L.learnTerm ty' exs' ctx' env')
+  where ty' = desugarFTy ty
+        exs' = desugarFExs exs
+        ctx' = desugarFCtx ctx
+        env' = (Map.map desugarFEnv m, fvs)
 
+desugarFEnv :: Either Term Type -> Either F.Term F.Type
+desugarFEnv (Left tm) = Left $ desugarFTm tm
+desugarFEnv (Right ty) = Right $ desugarFTy ty
 
 learnItms :: [(Id,Term)] -> (Context,Env) -> ([(Id,Term)], (Context,Env))
 learnItms [] cenv = ([], cenv)
