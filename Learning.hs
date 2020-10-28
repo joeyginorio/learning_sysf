@@ -321,7 +321,7 @@ checkEx :: [Term] -> [Term] -> Env -> Bool
 checkEx trms outs env =
   let trmouts = zip trms outs
       fvs = freshTmVars
-      in all (\(trm,out) -> betaEqualTm (eval trm env) out fvs) trmouts
+      in all (\(trm,out) -> betaEqualTm (eval trm env) (eval out env) fvs) trmouts
 
 -- Learn terms from types and examples
 lrnTerms :: Type -> [Example] -> Context -> Env -> [Term] -> Int -> [Term]
