@@ -67,7 +67,6 @@ extractFTo typ t@(TyTAbs i typ') ctx n fvs
                                  (\x -> retType x == typ || retType x == (TyVar i))
                                  styps
                         ts = [subType i styp typ' fvs | styp <- styps']
-                        ctx' = [b | b@(TmBind _ _) <- ctx]
 extractFTo typ typ' ctx n fvs = Set.empty
 
 -- Extracts the return type of a type
@@ -105,10 +104,9 @@ genTmTApps :: Type -> Context -> Int -> [Term]
 genTmTApps typ ctx n =
   let cartProd xs ys = [(x,y) | x <- xs, y <- ys]
       szs = [(n1, n - 1 - n1) | n1 <- [1..(n-1)]]
-      fTyps = [t | TmBind i t@(TyTAbs _ _) <- ctx]
-      tapptyps = genTAppsType typ
-      fxs = [(genETerms ftyp ctx (fst sz), [x]) |
-             (ftyp, x) <- tapptyps, sz <- szs, sizeType x == (snd sz)]
+      fxs = [(genETerms' ftyp ctx (fst sz), [x]) |
+             sz <- szs,
+             (ftyp, x) <- genTAppsTy typ (snd sz)]
       tapps = foldr (++) [] [cartProd fs xs | (fs, xs) <- fxs]
       in [TmTApp f x | (f,x) <- tapps]
 
@@ -126,6 +124,41 @@ genTAppsType typ =
               cond
               typ), styp) | (styp,conds) <- (zip subtyps condss), cond <- conds]
       in (TyTAbs i typ, TyUnit):fxs
+
+-- generates all posible type apps at base type, with applied type at size n
+genTAppsTy :: Type -> Int -> [(Type,Type)]
+genTAppsTy ty n = genTAppsTyp ty rtys n
+  where rtys = filter (\x -> sizeType x == n) (Set.toList $ getTypes ty)
+
+genTAppsTyp :: Type -> [Type] -> Int -> [(Type,Type)]
+genTAppsTyp ty rtys n = concat [genTAppsTypeN ty rty n | rty <- rtys]
+
+genTAppsTypeN :: Type -> Type -> Int -> [(Type,Type)]
+genTAppsTypeN ty rty n = map (\x -> (TyTAbs ("$TApp" ++ show n) x, rty)) tys
+  where tys = genTAppsType' ty rty n
+
+genTAppsType' :: Type -> Type -> Int -> [Type]
+genTAppsType' TyUnit rty n
+  | TyUnit == rty = TyUnit:[TyVar ("$TApp" ++ show n)]
+  | otherwise     = [TyUnit]
+genTAppsType' TyBool rty n
+  | TyBool == rty = TyBool:[TyVar ("$TApp" ++ show n)]
+  | otherwise     = [TyBool]
+genTAppsType' (TyVar i) rty n
+  | (TyVar i) == rty = (TyVar i):[TyVar ("$TApp" ++ show n)]
+  | otherwise        = [(TyVar i)]
+genTAppsType' ty@(TyAbs ty1 ty2) rty n
+  | ty == rty  = ty:[TyVar ("$TApp" ++ show n)]
+  | ty1 == rty = [TyAbs ty1 ty2' | ty2' <- genTAppsType' ty2 rty n] ++
+                 [TyAbs (TyVar ("$TApp" ++ show n)) ty2' | ty2' <- genTAppsType'
+                                                                   ty2
+                                                                   rty
+                                                                   n]
+  | otherwise  = [TyAbs ty1 ty2' | ty2' <- genTAppsType' ty2 rty n]
+genTAppsType' ty@(TyTAbs i ty') rty n
+  | ty == rty = ty:[TyVar ("$TApp" ++ show n)]
+  | otherwise = [TyTAbs i ty'' | ty'' <- genTAppsType' ty' rty n]
+
 
 -- Maps a function to each subtype in a type, conditional on some proposition
 mapCondType :: (Type -> Type) -> Type -> [Bool] -> Type -> Type
