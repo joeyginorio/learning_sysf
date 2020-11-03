@@ -69,6 +69,89 @@ extractFTo typ t@(TyTAbs i typ') ctx n fvs
                         ts = [subType i styp typ' fvs | styp <- styps']
 extractFTo typ typ' ctx n fvs = Set.empty
 
+extractFTo' :: Type -> Type -> Context -> Int -> Set.Set Type
+extractFTo' ty t@(TyAbs _ (TyVar i)) ctx n = Set.singleton
+                                             (subType i ty t freshTyVars)
+extractFTo' ty t@(TyAbs (TyVar i) ty2) ctx n
+  | ty == ty2 && (not (Set.member i (freeTyVar ty2))) = Set.fromList ts
+  | ty == ty2 = Set.singleton t
+  | otherwise = extractFTo' ty ty2 ctx n
+  where ty1s = genTypes ctx n
+        ts = [TyAbs ty1 ty2 | ty1 <- ty1s]
+extractFTo' ty t@(TyAbs _ ty2) ctx n
+  | ty == ty2 = Set.singleton t
+  | otherwise = extractFTo' ty ty2 ctx n
+extractFTo' ty t@(TyTAbs _ ty2) ctx n
+  | ty == ty2 = Set.singleton t
+  | otherwise = extractFTo' ty ty2 ctx n
+extractFTo' ty t ctx n = Set.empty
+
+-- short circuits if size isnt right
+extractTFTo' :: Type -> Type -> Int -> Set.Set (Type,Type)
+extractTFTo' ty1 ty2 n
+  | (sizeType ty1) - (sizeType ty2 - 2) == n = extractTFTo ty1 ty2
+  | otherwise = Set.empty
+
+-- be sure to short circuit immediately e.g. TF from X.Int->X to X.Bool->X
+extractTFTo :: Type -> Type -> Set.Set (Type, Type)
+extractTFTo (TyUnit) t@(TyTAbs i ty'@(TyVar x))
+  | x == i        = Set.singleton (t,TyUnit)
+  | otherwise     = Set.empty
+extractTFTo (TyUnit) t@(TyTAbs i ty')
+  | TyUnit == ty' = Set.singleton (t,TyUnit)
+  | otherwise     = Set.empty
+extractTFTo (TyBool) t@(TyTAbs i ty'@(TyVar x))
+  | TyBool == ty' = Set.singleton (t,TyBool)
+  | x == i        = Set.singleton (t,TyBool)
+  | otherwise     = Set.empty
+extractTFTo (TyBool) t@(TyTAbs i ty')
+  | TyBool == ty' = Set.singleton (t,TyBool)
+  | otherwise     = Set.empty
+extractTFTo (TyVar x) t@(TyTAbs i ty'@(TyVar x'))
+  | (TyVar x) == ty' = Set.singleton (t, TyVar x)
+  | x' == i          = Set.singleton (t, TyVar x)
+  | otherwise        = Set.empty
+extractTFTo t1@(TyAbs _ _) t2@(TyTAbs i t2'@(TyAbs _ _)) =
+  case (getTSub t1 t2' i Nothing) of
+    Nothing -> Set.empty
+    (Just ty) -> Set.singleton (t2, ty)
+extractTFTo t1@(TyAbs _ _) t2@(TyTAbs i (TyVar x))
+  | x == i    = Set.singleton (t2, t1)
+  | otherwise = Set.empty
+extractTFTo t1@(TyTAbs _ _) t2@(TyTAbs i t2'@(TyTAbs _ _)) =
+  case (getTSub t1 t2' i Nothing) of
+    Nothing -> Set.empty
+    (Just ty) -> Set.singleton (t2, ty)
+extractTFTo t1@(TyTAbs _ _) t2@(TyTAbs i (TyVar x))
+  | x == i    = Set.singleton (t2, t1)
+  | otherwise = Set.empty
+extractTFTo ty t = Set.empty
+
+-- extracts which type substitution would make the 2nd type into the first one
+-- for some type variable specified by ID
+-- initialized with Nothing for Maybe Type
+getTSub :: Type -> Type -> Id -> Maybe Type -> Maybe Type
+getTSub TyUnit ty i mty = case (ty,mty) of
+  (TyUnit, mty')      -> mty
+  (TyVar x, Nothing)  -> if x == i then Just TyUnit else Nothing
+  (TyVar x, Just ty') -> if x == i && ty' == TyUnit then mty else Nothing
+  otherwise           -> Nothing
+getTSub TyBool ty i mty = case (ty,mty) of
+  (TyBool, mty')      -> mty
+  (TyVar x, Nothing)  -> if x == i then Just TyBool else Nothing
+  (TyVar x, Just ty') -> if x == i && ty' == TyBool then mty else Nothing
+  otherwise           -> Nothing
+getTSub (TyVar y) ty i mty = case (ty,mty) of
+  (TyVar x, Nothing)  -> if x == i then Just (TyVar y) else Nothing
+  (TyVar x, Just ty') -> if x == i && ty' == (TyVar y) then mty else Nothing
+  otherwise           -> Nothing
+getTSub (TyAbs ty1 ty2) (TyAbs ty1' ty2') i mty = getTSub ty2 ty2' i mty'
+  where mty' = getTSub ty1 ty1' i mty
+getTSub (TyTAbs x ty1) (TyTAbs y ty2) i mty
+  | x == y = getTSub ty1 ty2 i mty
+  | otherwise = Nothing
+getTSub ty1 ty2 i mty = Nothing
+
 -- Extracts the return type of a type
 retType :: Type -> Type
 retType (TyUnit) = TyUnit
@@ -78,15 +161,17 @@ retType (TyAbs typ1 typ2) = retType typ2
 retType (TyTAbs i typ) = retType typ
 
 -- Extracts all function types to a type given a context
--- This is SUPER slow.
 extractFsTo :: Type -> Context -> Int -> [Type]
 extractFsTo typ ctx n =
   let ftyps = Set.toList (foldr
                           Set.union
                           Set.empty
-                          [extractFTo typ ftyp ctx n freshTyVars |
-                                           (TmBind _ ftyp) <- ctx])
+                          [extractFTo' typ ftyp ctx n | (TmBind _ ftyp) <- ctx])
       in ftyps
+
+extractTFsTo :: Type -> Context -> Int -> [(Type,Type)]
+extractTFsTo typ ctx n = Set.toList (foldr Set.union Set.empty
+             [extractTFTo' typ ftyp n | (TmBind _ ftyp@(TyTAbs _ _)) <- ctx])
 
 -- Generates all term applications at type to some AST depth n
 genTmApps :: Type -> Context -> Int -> [Term]
@@ -104,9 +189,9 @@ genTmTApps :: Type -> Context -> Int -> [Term]
 genTmTApps typ ctx n =
   let cartProd xs ys = [(x,y) | x <- xs, y <- ys]
       szs = [(n1, n - 1 - n1) | n1 <- [1..(n-1)]]
-      fxs = [(genETerms' ftyp ctx (fst sz), [x]) |
+      fxs = [(genETerms ftyp ctx (fst sz), [x]) |
              sz <- szs,
-             (ftyp, x) <- genTAppsTy typ (snd sz)]
+             (ftyp, x) <- extractTFsTo typ ctx (snd sz)]
       tapps = foldr (++) [] [cartProd fs xs | (fs, xs) <- fxs]
       in [TmTApp f x | (f,x) <- tapps]
 

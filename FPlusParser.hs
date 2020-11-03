@@ -36,6 +36,8 @@ foo2 (Foo2 x y) = x
 
 -}
 
+module FPlusParser where
+
 import MParser
 import FPlus
 import Control.Monad

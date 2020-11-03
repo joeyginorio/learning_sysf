@@ -5,46 +5,23 @@ Tests learning in System F for several terms. Useful for profiling performance.
 -}
 
 import Learning
-import SystemF
+import F
+import qualified FPlusParser as FPP
+import qualified FPlus as FP
+import qualified MParser as MP
 
-genId :: Context -> Int -> [Term]
-genId ctx n =
-  let typ = (TyTAbs "X" (TyAbs (TyVar "X") (TyVar "X")))
-      in genTerms typ ctx n
+parseExs :: String -> [Example]
+parseExs s = FP.desugarFExs (fst ((MP.parse (FPP.exs []) s) !! 0))
 
-lrnId :: Context -> Int -> [Term]
-lrnId ctx n =
-  let typ = (TyTAbs "X" (TyAbs (TyVar "X") (TyVar "X")))
-      exs = [InTy TyBool (InTm TmTrue (Out TmTrue))]
-      in learnTerms typ exs ctx n
+parseTm :: String -> Term
+parseTm s = FP.desugarFTm (fst ((MP.parse (FPP.tm []) s) !! 0))
 
-lrnBoolId :: Context -> Int -> [Term]
-lrnBoolId ctx n =
-  let typ = TyAbs TyBool TyBool
-      exs = [InTm TmTrue (Out TmTrue)]
-      in learnTerms typ exs ctx n
+parseTy :: String -> Type
+parseTy s = FP.desugarFTy (fst ((MP.parse (FPP.ty) s) !! 0))
 
-lrnProd :: Context -> Int -> [Term]
-lrnProd ctx n =
-  let typ = TyTAbs "X"
-            (TyTAbs "Y"
-             (TyTAbs "Z" (TyAbs
-                          (TyAbs (TyVar "X")
-                           (TyAbs (TyVar "Y")
-                            (TyVar "Z")))
-                          (TyVar "Z"))))
-      body = (TmApp
-              (TmApp
-                 (TmVar "f")
-                 (TmVar "x"))
-                (TmVar "y"))
-      out = (TmTAbs "Z" (TmAbs "x" TyBool (TmAbs "y" TyBool (TmAbs "f" (TyAbs TyBool(TyAbs TyBool (TyVar "Z"))) body))))
-      exs = [InTy TyBool (InTy TyBool (InTm TmTrue (InTm TmTrue (Out out))))]
-      in learnTerms typ exs ctx n
-      -- in [out]
-main = do
+mains =
   let ctx = []
-  let n   = 25
-  let typ = (TyTAbs "Z" (TyAbs (TyAbs TyBool (TyAbs TyBool (TyVar "Z"))) (TyVar "Z")))
-  let tms = genTerms (TyAbs typ TyBool) [] 30
-  print $ tms
+      n   = 20
+      ty = parseTy "(X . X -> X -> X) -> (X . X -> X -> X)"
+      tms = genTerms ty ctx n
+  in tms
