@@ -19,9 +19,10 @@ parseTm s = FP.desugarFTm (fst ((MP.parse (FPP.tm []) s) !! 0))
 parseTy :: String -> Type
 parseTy s = FP.desugarFTy (fst ((MP.parse (FPP.ty) s) !! 0))
 
-mains =
-  let ctx = []
-      n   = 20
-      ty = parseTy "(X . X -> X -> X) -> (X . X -> X -> X)"
-      tms = genTerms ty ctx n
-  in tms
+main =
+  let ty1 = parseTy "(X . X -> X)"
+      ctx = [TmBind "b" ty1]
+      n   = 11
+      ty = parseTy "Unit"
+      tms = genTerms TyUnit ctx n
+  in mapM_ print tms

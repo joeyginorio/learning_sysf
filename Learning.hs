@@ -54,43 +54,136 @@ genTmVars typ ctx = [TmVar i | (TmBind i typ') <- ctx,
                                 betaEqualTy typ' typ freshTyVars]
 
 
--- Extracts the most direct function type/subtype to typ1 from typ2
-extractFTo :: Type -> Type -> Context -> Int -> [Id] -> Set.Set Type
-extractFTo typ t@(TyAbs typ1 typ2) ctx n fvs
-  | typ == typ2 = Set.singleton t
-  | otherwise   = extractFTo typ typ2 ctx n fvs
-extractFTo typ t@(TyTAbs i typ') ctx n fvs
-  | typ == typ' = Set.singleton t
-  | otherwise   = foldr Set.union Set.empty [extractFTo typ t' ctx n fvs | t' <- ts]
-                  where styps = genTypes ctx n
-                        styps' = filter
-                                 (\x -> retType x == typ || retType x == (TyVar i))
-                                 styps
-                        ts = [subType i styp typ' fvs | styp <- styps']
-extractFTo typ typ' ctx n fvs = Set.empty
-
+-- GENTYPES HERE IS SO SLOW
 extractFTo' :: Type -> Type -> Context -> Int -> Set.Set Type
 extractFTo' ty t@(TyAbs _ (TyVar i)) ctx n = Set.singleton
                                              (subType i ty t freshTyVars)
 extractFTo' ty t@(TyAbs (TyVar i) ty2) ctx n
   | ty == ty2 && (not (Set.member i (freeTyVar ty2))) = Set.fromList ts
-  | ty == ty2 = Set.singleton t
+  | ty == ty2 && (    (Set.member i (freeTyVar ty2))) = Set.singleton t
   | otherwise = extractFTo' ty ty2 ctx n
-  where ty1s = genTypes ctx n
+  where ty1s = getTysCtx ctx
         ts = [TyAbs ty1 ty2 | ty1 <- ty1s]
 extractFTo' ty t@(TyAbs _ ty2) ctx n
   | ty == ty2 = Set.singleton t
   | otherwise = extractFTo' ty ty2 ctx n
-extractFTo' ty t@(TyTAbs _ ty2) ctx n
-  | ty == ty2 = Set.singleton t
-  | otherwise = extractFTo' ty ty2 ctx n
+extractFTo' ty t@(TyTAbs _ ty2) ctx n = extractFTo' ty ty2 ctx n
 extractFTo' ty t ctx n = Set.empty
+
+extractFTo :: Type -> Type -> Context -> Int -> Set.Set Type
+extractFTo ty t@(TyAbs _ ty2) ctx n
+  | ty == ty2 = Set.singleton t
+  | otherwise = extractFTo ty ty2 ctx n
+-- extractFTo ty t@(TyTAbs i ty') ctx n
+--   | length l2 <= length l1 = Set.empty
+--   | otherwise              = Set.fromList ts
+--   where l1 = unfoldType ty [] freshTyVars
+--         l1s = [unfoldType' ty [] n' freshTyVars | n' <- [0..((length l1)-1)]]
+--         l2 = unfoldType t [] freshTyVars
+--         l2s = replicate (length l1s) l2
+--         l1l2s = [(l11,l22) | (l11,l22) <- zip l1s l2s,
+--                              length l22 <= length l11]
+--         nl1s = fst . unzip $ l1l2s
+--         nl2s = snd . unzip $ l1l2s
+--         l1s' = map reverse nl1s
+--         l2s' = [fst . splitAt (length l11 +1) . reverse $ l22 | l11 <- nl1s,
+--                                                                 l22 <- nl2s]
+--         l1' = reverse l1
+--         l2' = fst . splitAt (length l1 + 1) . reverse $ l2
+--         cnstrs = getConstr l1' l2'
+--         css = [getConstr l11 l22 | (l11,l22) <- zip l1s' l2s']
+--         fss = genFromConstr (reverse l2') cnstrs ctx n
+--         fsss = [genFromConstr (reverse l22) cs ctx n | (l22,cs) <- zip l2s' css]
+--         ts = concat [[foldr1 TyAbs fs | fs <- fss'] | fss' <- fsss]
+
+extractFTo ty t@(TyTAbs i ty') ctx n = Set.fromList ts
+  where l1s = unfoldTypes ty
+        l2s = replicate (length l1s) (unfoldType t [] freshTyVars)
+        l1l2s = [(l11,l22) | (l11,l22) <- zip l1s l2s,
+                             length l22 > length l11]
+        l1s' = [reverse l11 | (l11,l22) <- l1l2s]
+        l2s' = [fst . splitAt (length l11 + 1) . reverse $ l22 | (l11,l22) <- l1l2s]
+        css = [getConstr l11' l22' | (l11',l22') <- zip l1s' l2s']
+        fsss = [genFromConstr (reverse l22') cs ctx n | (l22',Just cs) <- zip l2s' css]
+        ts = concat [[foldr1 TyAbs fs | fs <- fss] | fss <- fsss]
+extractFTo ty t ctx n = Set.empty
+
+-- get constraints for type variables in ty2s to turn into ty1s
+getConstr :: [Type] -> [Type] -> Maybe [(Type,Type)]
+getConstr (ty1:ty1s) (ty2@(TyVar i):ty2s)
+  | ty1 /= ty2 = case (getConstr ty1s ty2s) of
+                   Nothing -> Nothing
+                   Just x -> Just $ (ty2,ty1):x
+  | otherwise = getConstr ty1s ty2s
+getConstr (ty1:ty1s) (ty2:ty2s)
+  | ty1 /= ty2 = Nothing
+  | otherwise  = getConstr ty1s ty2s
+getConstr ty1s ty2s = Just []
+
+genFromConstr :: [Type] -> [(Type,Type)] -> Context -> Int -> [[Type]]
+genFromConstr tys@(ty@(TyVar i):tys') tycs ctx n
+  | not $ checkConstr tycs Map.empty = []
+  | otherwise                        = case Map.lookup ty m of
+      (Just x) -> [map f tys]
+      Nothing  -> [nty:ttys | nty <- ntys]
+  where m = Map.fromList tycs
+        f = (\x -> case Map.lookup x m of
+                     Nothing -> x
+                     (Just y) -> y)
+        htys = head tys
+        ttys = map f (tail tys)
+        ntys = genTypes ctx n
+
+genFromConstr tys tycs ctx n
+  | not $ checkConstr tycs Map.empty = []
+  | otherwise                        = [map f tys]
+  where f = (\x -> case Map.lookup x m of
+                       Nothing  -> x
+                       (Just y) -> y)
+        m = Map.fromList tycs
+
+
+checkConstr :: [(Type, Type)] -> Map.Map Type Type -> Bool
+checkConstr ((ty1,ty2):tycs) m = case Map.lookup ty1 m of
+  Nothing   -> checkConstr tycs (Map.insert ty1 ty2 m)
+  Just ty2' -> if ty2 /= ty2'
+                  then False
+                  else checkConstr tycs m
+checkConstr [] m = True
+
+foldlN n f xs = (foldl1 f $ take n xs) : drop n xs
+
+unfoldTypes :: Type -> [[Type]]
+unfoldTypes t@(TyTAbs _ _) = [[t]]
+unfoldTypes ty = l1:[unfoldType' ty [] n freshTyVars | n <- [0..(length l1 - 2)]]
+  where l1 = unfoldType ty [] freshTyVars
+
+
+unfoldType :: Type -> [Id] -> [Id] -> [Type]
+unfoldType TyUnit is fvs = [TyUnit]
+unfoldType TyBool is fvs = [TyBool]
+unfoldType (TyVar x) is fvs = [TyVar x]
+unfoldType (TyAbs ty1 ty2) is fvs = ty1 : unfoldType ty2 is fvs
+unfoldType (TyTAbs i ty) is (x:xs)
+  | i `elem` is = unfoldType (subType i (TyVar x) ty xs) (x:is) xs
+  | otherwise   = unfoldType ty (i:is) (x:xs)
+
+unfoldType' :: Type -> [Id] -> Int -> [Id] -> [Type]
+unfoldType' TyUnit is n fvs = [TyUnit]
+unfoldType' TyBool is n fvs = [TyBool]
+unfoldType' (TyVar x) is n fvs = [TyVar x]
+unfoldType' t@(TyAbs ty1 ty2) is n fvs
+  | n > 0 = ty1 : unfoldType' ty2 is (n-1) fvs
+  | otherwise = t:[]
+unfoldType' t@(TyTAbs i ty) is n (x:xs) = [t]
 
 -- short circuits if size isnt right
 extractTFTo' :: Type -> Type -> Int -> Set.Set (Type,Type)
-extractTFTo' ty1 ty2 n
-  | (sizeType ty1) - (sizeType ty2 - 2) == n = extractTFTo ty1 ty2
-  | otherwise = Set.empty
+extractTFTo' ty1 ty2 n = case Set.toList (extractTFTo ty1 ty2) of
+  [] -> Set.empty
+  (tyty@(_,ty):_) -> if sizeType ty == n
+                     then Set.singleton tyty
+                     else Set.empty
 
 -- be sure to short circuit immediately e.g. TF from X.Int->X to X.Bool->X
 extractTFTo :: Type -> Type -> Set.Set (Type, Type)
@@ -145,12 +238,20 @@ getTSub (TyVar y) ty i mty = case (ty,mty) of
   (TyVar x, Nothing)  -> if x == i then Just (TyVar y) else Nothing
   (TyVar x, Just ty') -> if x == i && ty' == (TyVar y) then mty else Nothing
   otherwise           -> Nothing
-getTSub (TyAbs ty1 ty2) (TyAbs ty1' ty2') i mty = getTSub ty2 ty2' i mty'
-  where mty' = getTSub ty1 ty1' i mty
-getTSub (TyTAbs x ty1) (TyTAbs y ty2) i mty
-  | x == y = getTSub ty1 ty2 i mty
-  | otherwise = Nothing
-getTSub ty1 ty2 i mty = Nothing
+getTSub t@(TyAbs ty1 ty2) ty i mty = case (ty,mty) of
+  ((TyAbs (TyVar x) ty2'), Nothing)  -> if x == i
+                                        then getTSub ty2 ty2' i (Just ty1)
+                                        else Nothing
+  ((TyAbs (TyVar x) ty2'), Just ty') -> if x == i && ty' == ty1
+                                        then getTSub ty2 ty2' i mty
+                                        else Nothing
+  (TyVar x, Nothing)                 -> if x == i then Just t else Nothing
+  (TyVar x, Just ty')                -> if x == i && ty' == t then mty else Nothing
+  otherwise                          -> Nothing
+getTSub t@(TyTAbs x ty1) ty i mty = case (ty,mty) of
+  (TyVar x, Nothing)  -> if x == i then Just t else Nothing
+  (TyVar x, Just ty') -> if x == i && ty' == t then mty else Nothing
+  otherwise           -> Nothing
 
 -- Extracts the return type of a type
 retType :: Type -> Type
@@ -166,7 +267,7 @@ extractFsTo typ ctx n =
   let ftyps = Set.toList (foldr
                           Set.union
                           Set.empty
-                          [extractFTo' typ ftyp ctx n | (TmBind _ ftyp) <- ctx])
+                          [extractFTo typ ftyp ctx n | (TmBind _ ftyp) <- ctx])
       in ftyps
 
 extractTFsTo :: Type -> Context -> Int -> [(Type,Type)]
@@ -278,6 +379,14 @@ getTypes typ@(TyAbs typ1 typ2) = Set.insert typ (Set.union (getTypes typ1)
 getTypes typ@(TyTAbs i typ') = Set.insert typ (getTypes typ')
 getTypes typ = Set.singleton typ
 
+getTysCtx :: Context -> [Type]
+getTysCtx = Set.toList .  getTysCtx'
+
+getTysCtx' :: Context -> Set.Set Type
+getTysCtx' [] = Set.empty
+getTysCtx' ((TyBind x):bs) = Set.insert (TyVar x) (getTysCtx' bs)
+getTysCtx' ((TmBind _ ty):bs) = Set.union (getTypes ty) (getTysCtx' bs)
+
 -- Counts instances of subtype in type
 countType :: Type -> Type -> Int
 countType styp typ@(TyAbs typ1 typ2)
@@ -336,15 +445,21 @@ genITerms' typ@(TyTAbs i typ') ctx n =
 
 -- Generates all elimination types to some AST depth n
 genETypes :: Context -> Int -> [Type]
-genETypes _ 0 = []
-genETypes ctx 1 = (genTyVars ctx)
-genETypes ctx n = []
+genETypes = memo2 genETypes'
+
+genETypes' :: Context -> Int -> [Type]
+genETypes' _ 0 = []
+genETypes' ctx 1 = (genTyVars ctx)
+genETypes' ctx n = []
 
 -- Generates all introduction types to some AST depth n
 genITypes :: Context -> Int -> [Type]
-genITypes _ 0 = []
-genITypes ctx 1 = [TyUnit, TyBool] ++ genETypes ctx 1
-genITypes ctx n = (genTyAbs ctx n) ++ (genTyTAbs ctx n) ++ (genETypes ctx n)
+genITypes = memo2 genITypes'
+
+genITypes' :: Context -> Int -> [Type]
+genITypes' _ 0 = []
+genITypes' ctx 1 = [TyUnit, TyBool] ++ genETypes ctx 1
+genITypes' ctx n = (genTyAbs ctx n) ++ (genTyTAbs ctx n) ++ (genETypes ctx n)
 
 -- Generates all types to some AST depth n
 genTypes :: Context -> Int -> [Type]
