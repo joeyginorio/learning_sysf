@@ -275,6 +275,7 @@ eval trm@(TmVar i) (m,fvs) = val
   where (Left val) = Map.findWithDefault (Left trm) i m
 eval trm@(TmAbs i ty tm) env = TmAbs i ty (eval tm env)
 eval (TmApp (TmAbs i _ trm1) trm2) e@(_,fvs) = eval (subTerm i trm2 trm1 fvs) e
+eval (TmApp (TmVar i) tm2) e@(_,fvs) = TmApp (eval (TmVar i) e) (eval tm2 e)
 eval (TmApp trm1 trm2) env = eval (TmApp trm1' trm2') env
   where trm1' = eval trm1 env
         trm2' = eval trm2 env
