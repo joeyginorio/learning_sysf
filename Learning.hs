@@ -71,8 +71,7 @@ extractFTo2 ty t ctx is n = Set.empty
 extractTFTo2 :: Type -> Type -> Context -> Int -> Set.Set (Type, Type)
 extractTFTo2 ty1 t@(TyTAbs i ty2) ctx n = Set.fromList ts
   where ts = [(t,fty)| (TmBind _ fty) <- ctx,
-                       betaEqualTy (subType i fty ty2 freshTyVars) ty1 freshTyVars,
-                       sizeType fty == n]
+                       (subType i fty ty2 freshTyVars) == ty1]
 
 extractFTo :: Type -> Type -> Context -> Set.Set Type
 extractFTo ty t@(TyAbs _ ty2) ctx
@@ -262,6 +261,13 @@ cleanCtx ((TmBind f typ):bs) n
   | sizeType typ < n = Set.insert typ (cleanCtx bs n)
   | otherwise        = cleanCtx bs n
 
+cleanCtx2 :: Context -> Int -> Set.Set Type
+cleanCtx2 [] n = Set.empty
+cleanCtx2 ((TyBind _):bs) n = cleanCtx2 bs n
+cleanCtx2 ((TmBind f typ):bs) n
+  | sizeType typ == n = Set.insert typ (cleanCtx2 bs n)
+  | otherwise         = cleanCtx2 bs n
+
 -- Extracts all function types to a type given a context
 extractFsTo :: Type -> Context -> Int -> [Type]
 extractFsTo typ ctx n =
@@ -274,7 +280,8 @@ extractFsTo typ ctx n =
 
 extractTFsTo :: Type -> Context -> Int -> [(Type,Type)]
 extractTFsTo typ ctx n = Set.toList (foldr Set.union Set.empty
-             [extractTFTo2 typ ftyp ctx n | (TmBind _ ftyp@(TyTAbs _ _)) <- ctx])
+             [extractTFTo2 typ ftyp ctx n | ftyp@(TyTAbs _ _) <- ctx'])
+  where ctx' = Set.toList $ cleanCtx2 ctx n
 
 -- Generates all term applications at type to some AST depth n
 genTmApps :: Type -> Context -> Int -> [Term]
