@@ -525,14 +525,18 @@ eval' tm@(TmVar i) (m,fvs) = val
   where (Left val) = Map.findWithDefault (Left tm) i m
 eval' (TmAbs i ty tm) env = TmAbs i ty (eval' tm env)
 eval' (TmApp (TmAbs i _ tm1) tm2) e@(_,fvs) = eval' (subTerm i tm2 tm1 fvs) e
-eval' (TmApp (TmVar i) tm2) e@(_,fvs) = TmApp (eval' (TmVar i) e) (eval' tm2 e)
-eval' (TmApp tm1 tm2) env = eval' (TmApp tm1' tm2') env
-  where tm1' = eval' tm1 env
-        tm2' = eval' tm2 env
+-- eval' (TmApp tm1 tm2) env = eval' (TmApp tm1' tm2') env
+  -- where tm1' = eval' tm1 env
+        -- tm2' = eval' tm2 env
+eval' (TmApp tm1 tm2) env = case (eval' tm1 env) of
+                              t@(TmAbs _ _ _) -> eval' (TmApp t (eval' tm2 env)) env
+                              otherwise       -> TmApp (eval' tm1 env) (eval' tm2 env)
 eval' (TmTAbs i tm) env = (TmTAbs i (eval' tm env))
 eval' (TmTApp (TmTAbs i tm) ty) e@(_,fvs) = eval' (subTypeTerm i ty tm fvs) e
-eval' (TmTApp tm ty) env = eval' (TmTApp tm' ty) env
-  where tm' = eval' tm env
+eval' (TmTApp (TmVar i) ty) e@(_,fvs) = TmTApp (eval' (TmVar i) e) ty
+eval' (TmTApp tm ty) env = case (eval' tm env) of
+                             t@(TmTAbs _ _) -> eval' (TmTApp t ty) env
+                             otherwise      -> TmTApp (eval' tm env) ty
 eval' (TmLet itms tm) e@(_,fvs) = evalLet itms tm e
 eval' (TmConstr c tms ty) env = TmConstr c tms' ty
   where tms' = map (\tm -> eval' tm env) tms

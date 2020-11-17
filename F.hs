@@ -275,11 +275,11 @@ eval trm@(TmVar i) (m,fvs) = val
   where (Left val) = Map.findWithDefault (Left trm) i m
 eval trm@(TmAbs i ty tm) env = TmAbs i ty (eval tm env)
 eval (TmApp (TmAbs i _ trm1) trm2) e@(_,fvs) = eval (subTerm i trm2 trm1 fvs) e
-eval (TmApp (TmVar i) tm2) e@(_,fvs) = TmApp (eval (TmVar i) e) (eval tm2 e)
-eval (TmApp trm1 trm2) env = eval (TmApp trm1' trm2') env
-  where trm1' = eval trm1 env
-        trm2' = eval trm2 env
+eval (TmApp tm1 tm2) env = case (eval tm1 env) of
+                              t@(TmAbs _ _ _) -> eval (TmApp t (eval tm2 env)) env
+                              otherwise       -> TmApp (eval tm1 env) (eval tm2 env)
 eval trm@(TmTAbs i tm) env = TmTAbs i (eval tm env)
 eval (TmTApp (TmTAbs i trm) typ) (_,fvs) = subTypeTerm i typ trm fvs
-eval (TmTApp trm typ) env = eval (TmTApp trm' typ) env
-  where trm' = eval trm env
+eval (TmTApp trm typ) env = case (eval trm env) of
+                              t@(TmTAbs _ _) -> eval (TmTApp t typ) env
+                              otherwise      -> TmTApp (eval trm env) typ

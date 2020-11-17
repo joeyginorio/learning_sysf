@@ -57,12 +57,22 @@ genTmVars :: Type -> Context -> [Term]
 genTmVars typ ctx = [TmVar i | (TmBind i typ') <- ctx,
                                 betaEqualTy typ' typ freshTyVars]
 
--- extractFTo' :: Type -> Context -> [Type]
--- extractFTo'
-extractFsTo2 :: Type -> Context -> [Type]
-extractFsTo2 ty ctx = map (\x -> TyAbs x ty) tys
-  where tys = getTysCtx ((TmBind "$GOOP" ty):ctx)
+extractFTo2 :: Type -> Type -> Context -> [Id] -> Int -> Set.Set Type
+extractFTo2 ty t@(TyAbs _ ty2) ctx is n
+  | ty == ty2 = Set.singleton t
+  | otherwise = extractFTo2 ty ty2 ctx is n
+extractFTo2 ty t@(TyTAbs i ty') ctx is n
+  | i `elem` is = Set.empty
+  | otherwise = foldr Set.union Set.empty ts
+  where ts' = [subType i fty ty' freshTyVars | (TmBind _ fty) <- ctx]
+        ts  = [extractFTo2 ty t' ctx (i:is) n | t' <- ts']
+extractFTo2 ty t ctx is n = Set.empty
 
+extractTFTo2 :: Type -> Type -> Context -> Int -> Set.Set (Type, Type)
+extractTFTo2 ty1 t@(TyTAbs i ty2) ctx n = Set.fromList ts
+  where ts = [(t,fty)| (TmBind _ fty) <- ctx,
+                       betaEqualTy (subType i fty ty2 freshTyVars) ty1 freshTyVars,
+                       sizeType fty == n]
 
 extractFTo :: Type -> Type -> Context -> Set.Set Type
 extractFTo ty t@(TyAbs _ ty2) ctx
@@ -245,31 +255,33 @@ retType (TyVar i) = TyVar i
 retType (TyAbs typ1 typ2) = retType typ2
 retType (TyTAbs i typ) = retType typ
 
-cleanCtx :: Context -> Set.Set Type
-cleanCtx [] = Set.empty
-cleanCtx ((TyBind _):bs) = cleanCtx bs
-cleanCtx ((TmBind f typ):bs) = Set.insert typ (cleanCtx bs)
+cleanCtx :: Context -> Int -> Set.Set Type
+cleanCtx [] n = Set.empty
+cleanCtx ((TyBind _):bs) n = cleanCtx bs n
+cleanCtx ((TmBind f typ):bs) n
+  | sizeType typ < n = Set.insert typ (cleanCtx bs n)
+  | otherwise        = cleanCtx bs n
 
 -- Extracts all function types to a type given a context
-extractFsTo :: Type -> Context -> [Type]
-extractFsTo typ ctx =
-  let tys = Set.toList $ cleanCtx ctx
+extractFsTo :: Type -> Context -> Int -> [Type]
+extractFsTo typ ctx n =
+  let tys = Set.toList $ cleanCtx ctx n
       ftyps = List.foldl'
               (++)
               []
-              [Set.toList $ extractFTo typ ty ctx | ty <- tys]
+              [Set.toList $ extractFTo2 typ ty ctx [] n | ty <- tys]
       in ftyps
 
 extractTFsTo :: Type -> Context -> Int -> [(Type,Type)]
 extractTFsTo typ ctx n = Set.toList (foldr Set.union Set.empty
-             [extractTFTo' typ ftyp n | (TmBind _ ftyp@(TyTAbs _ _)) <- ctx])
+             [extractTFTo2 typ ftyp ctx n | (TmBind _ ftyp@(TyTAbs _ _)) <- ctx])
 
 -- Generates all term applications at type to some AST depth n
 genTmApps :: Type -> Context -> Int -> [Term]
 genTmApps typ12 ctx n =
   let szs = [(n1, n - 1 - n1) | n1 <- [1..(n-1)]]
       fxs = [(x,y) | sz <- szs,
-                     typ@(TyAbs typ11' _) <- extractFsTo typ12 ctx,
+                     typ@(TyAbs typ11' _) <- extractFsTo typ12 ctx (fst sz),
                      x <- genETerms typ ctx (fst sz),
                      y <- genITerms typ11' ctx (snd sz)]
       in [TmApp f x | (f,x) <- fxs]
@@ -389,47 +401,47 @@ countType styp typ
   | otherwise   = 0
 
 -- Generates all elimination terms at type to some AST depth n
-genETerms :: Type -> Context -> Int -> [Term]
-genETerms = memo3 genETerms'
+-- genETerms :: Type -> Context -> Int -> [Term]
+-- genETerms = memo3 genETerms'
 
-genETerms' :: Type -> Context -> Int -> [Term]
-genETerms'  _ _ 0 = []
-genETerms' (TyUnit) ctx 1 = genTmVars TyUnit ctx
-genETerms' (TyUnit) ctx n = (genTmApps TyUnit ctx n) ++
+genETerms :: Type -> Context -> Int -> [Term]
+genETerms  _ _ 0 = []
+genETerms (TyUnit) ctx 1 = genTmVars TyUnit ctx
+genETerms (TyUnit) ctx n = (genTmApps TyUnit ctx n) ++
                            (genTmTApps TyUnit ctx n)
-genETerms' (TyBool) ctx 1 = genTmVars TyBool ctx
-genETerms' (TyBool) ctx n = (genTmApps TyBool ctx n) ++
+genETerms (TyBool) ctx 1 = genTmVars TyBool ctx
+genETerms (TyBool) ctx n = (genTmApps TyBool ctx n) ++
                            (genTmTApps TyBool ctx n)
-genETerms' (TyVar i) ctx 1 = genTmVars (TyVar i) ctx
-genETerms' (TyVar i) ctx n = (genTmApps (TyVar i) ctx n) ++
+genETerms (TyVar i) ctx 1 = genTmVars (TyVar i) ctx
+genETerms (TyVar i) ctx n = (genTmApps (TyVar i) ctx n) ++
                             (genTmTApps (TyVar i) ctx n)
-genETerms' typ@(TyAbs _ _) ctx 1 = genTmVars typ ctx
-genETerms' typ@(TyAbs _ _) ctx n = (genTmApps typ ctx n) ++
+genETerms typ@(TyAbs _ _) ctx 1 = genTmVars typ ctx
+genETerms typ@(TyAbs _ _) ctx n = (genTmApps typ ctx n) ++
                                   (genTmTApps typ ctx n)
-genETerms' typ@(TyTAbs _ _) ctx 1 = genTmVars typ ctx
-genETerms' typ@(TyTAbs _ _) ctx n = (genTmApps typ ctx n) ++
+genETerms typ@(TyTAbs _ _) ctx 1 = genTmVars typ ctx
+genETerms typ@(TyTAbs _ _) ctx n = (genTmApps typ ctx n) ++
                                    (genTmTApps typ ctx n)
 
 
 -- Generates all introduction terms at type to some AST depth n
-genITerms :: Type -> Context -> Int -> [Term]
-genITerms = memo3 genITerms'
+-- genITerms :: Type -> Context -> Int -> [Term]
+-- genITerms = memo3 genITerms'
 
-genITerms' :: Type -> Context -> Int -> [Term]
-genITerms' _ _ 0 = []
-genITerms' (TyUnit) ctx 1 = [TmUnit] ++ (genETerms TyUnit ctx 1)
-genITerms' (TyUnit) ctx n = genETerms TyUnit ctx n
-genITerms' (TyBool) ctx 1 = [TmTrue, TmFalse] ++ (genETerms TyBool ctx 1)
-genITerms' (TyBool) ctx n = genETerms TyBool ctx n
-genITerms' (TyVar i) ctx n = genETerms (TyVar i) ctx n
-genITerms' typ@(TyAbs typ11 typ12) ctx 1 = genETerms typ ctx 1
-genITerms' typ@(TyAbs typ11 typ12) ctx n =
+genITerms :: Type -> Context -> Int -> [Term]
+genITerms _ _ 0 = []
+genITerms (TyUnit) ctx 1 = [TmUnit] ++ (genETerms TyUnit ctx 1)
+genITerms (TyUnit) ctx n = genETerms TyUnit ctx n
+genITerms (TyBool) ctx 1 = [TmTrue, TmFalse] ++ (genETerms TyBool ctx 1)
+genITerms (TyBool) ctx n = genETerms TyBool ctx n
+genITerms (TyVar i) ctx n = genETerms (TyVar i) ctx n
+genITerms typ@(TyAbs typ11 typ12) ctx 1 = genETerms typ ctx 1
+genITerms typ@(TyAbs typ11 typ12) ctx n =
   let i = "x" ++ (show n)
       sz = sizeType typ11
       tms = genITerms typ12 ((TmBind i typ11):ctx) (n-sz-1)
       in [TmAbs i typ11 tm | tm <- tms] ++ (genETerms typ ctx n)
-genITerms' typ@(TyTAbs _ _) ctx 1 = genETerms typ ctx 1
-genITerms' typ@(TyTAbs i typ') ctx n =
+genITerms typ@(TyTAbs _ _) ctx 1 = genETerms typ ctx 1
+genITerms typ@(TyTAbs i typ') ctx n =
   let tms = genITerms typ' ((TyBind i):ctx) (n-1)
       in [TmTAbs i tm | tm <- tms] ++ (genETerms typ ctx n)
 
@@ -484,16 +496,22 @@ lenExample (InTy typ ex) = 1 + lenExample ex
 
 -- Beta equality of terms
 betaEqualTm :: Term -> Term -> [Id] -> Bool
-betaEqualTm trm1@(TmAbs x1 typ1 _) trm2@(TmAbs x2 typ2 _) (i:is)
+betaEqualTm tm1 tm2 is = betaEqualTm' tm1' tm2' is
+  where tm1' = eval tm1 (Map.empty, freshTmVars)
+        tm2' = eval tm2 (Map.empty, freshTmVars)
+
+
+betaEqualTm' :: Term -> Term -> [Id] -> Bool
+betaEqualTm' trm1@(TmAbs x1 typ1 _) trm2@(TmAbs x2 typ2 _) (i:is)
   | typ1 /= typ2 = False
   | otherwise = let (TmAbs _ _ trm1') = replaceTmVar x1 i trm1
                     (TmAbs _ _ trm2') = replaceTmVar x2 i trm2
-                    in betaEqualTm trm1' trm2' is
-betaEqualTm (TmTAbs x1 trm1) (TmTAbs x2 trm2) fvs@(i:is) =
+                    in betaEqualTm' trm1' trm2' is
+betaEqualTm' (TmTAbs x1 trm1) (TmTAbs x2 trm2) fvs@(i:is) =
   let trm1' = subTypeTerm x1 (TyVar i) trm1 fvs
       trm2' = subTypeTerm x2 (TyVar i) trm2 fvs
-      in betaEqualTm trm1' trm2' is
-betaEqualTm trm1 trm2 _ = trm1 == trm2
+      in betaEqualTm' trm1' trm2' is
+betaEqualTm' trm1 trm2 _ = trm1 == trm2
 
 -- Beta equality of types
 betaEqualTy :: Type -> Type -> [Id] -> Bool
