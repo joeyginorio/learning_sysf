@@ -5,15 +5,10 @@ Defines syntax, typing, evaluation for System F. Follows the specification in
 Chapter 2 of "Learning in System F".
 -}
 
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE DeriveGeneric #-}
 module F where
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
-import Data.MemoTrie
-import GHC.Generics (Generic)
 
 
 {- ====================== Syntax of Terms & Types  ==========================-}
@@ -46,7 +41,7 @@ data Type = TyUnit
           | TyVar Id
           | TyAbs Type Type
           | TyTAbs Id Type
-          deriving (Eq, Ord, Generic)
+          deriving (Eq, Ord)
 
 -- For pretty printing types
 instance Show Type where
@@ -56,26 +51,12 @@ instance Show Type where
   show (TyAbs typ1 typ2) = concat ["(", show typ1, " -> ", show typ2, ")"]
   show (TyTAbs i typ) = concat ["(", i, ".", show typ, ")"]
 
--- For memoizing with MemoTrie
-instance HasTrie Type where
-  newtype (Type :->: b) = TypeTrie {unTypeTrie :: Reg Type :->: b}
-  trie = trieGeneric TypeTrie
-  untrie = untrieGeneric unTypeTrie
-  enumerate = enumerateGeneric unTypeTrie
-
 
 {- =============================== Typing  =================================-}
 
 data Binding = TmBind Id Type
              | TyBind Id
-             deriving (Eq, Show, Generic)
-
--- For memoizing with MemoTrie
-instance HasTrie Binding where
-  newtype (Binding :->: b) = BindingTrie {unBindingTrie :: Reg Binding :->: b}
-  trie = trieGeneric BindingTrie
-  untrie = untrieGeneric unBindingTrie
-  enumerate = enumerateGeneric unBindingTrie
+             deriving (Eq, Show)
 
 type Context = [Binding]
 

@@ -1,28 +1,24 @@
 {-|
 Testing.hs
 ==============================================================================
-Tests learning in System F for several terms. Useful for profiling performance.
+Tests learning in System F. Useful for profiling performance.
 -}
 
 import Learning
-import F
+import System.Environment
 import qualified FPlusParser as FPP
 import qualified FPlus as FP
-import qualified MParser as MP
 
-parseExs :: String -> [Example]
-parseExs s = FP.desugarFExs (fst ((MP.parse (FPP.exs []) s) !! 0))
+parseFile' :: String -> IO (Either FP.Term FP.TCError)
+parseFile' s = do p <- FPP.parseFile s FPP.prog
+                  let p' = FPP.desugarProg p
+                  case (FP.typeCheck p' []) of
+                    Left e -> return $ Right $ e
+                    Right t -> return $ Left $ FP.eval $ FP.learn p'
 
-parseTm :: String -> Term
-parseTm s = FP.desugarFTm (fst ((MP.parse (FPP.tm []) s) !! 0))
+main = do fName <- getArgs
+          case fName of
+            [] -> putStrLn "Need command line arg to specify filename."
+            (x:xs) -> do p <- parseFile' x
+                         print p
 
-parseTy :: String -> Type
-parseTy s = FP.desugarFTy (fst ((MP.parse (FPP.ty) s) !! 0))
-
-main =
-  let ty1 = parseTy "(X . X -> X)"
-      ctx = [TmBind "b" ty1]
-      n   = 11
-      ty = parseTy "Unit"
-      tms = genTerms TyUnit ctx n
-  in mapM_ print tms

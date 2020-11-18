@@ -224,7 +224,7 @@ tmLSpec tys = do symbol "("
 
 exs :: [Type] -> Parser [Example]
 exs tys = do symbol "["
-             xs <- sepby (ex tys) (symbol ",")
+             xs <- sepby (ex tys) ((symbol ",\n") <|> (symbol ","))
              symbol "]"
              return xs
 

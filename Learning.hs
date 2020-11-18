@@ -1,7 +1,3 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE DeriveGeneric #-}
-
 {-|
 Learning.hs
 ==============================================================================
@@ -14,9 +10,6 @@ import F
 import qualified Data.Map as Map
 import qualified Data.List as List
 import qualified Data.Set as Set
-import Data.MemoTrie
-
-import GHC.Generics (Generic)
 
 {-========================= Generators from Type =============================-}
 
@@ -53,24 +46,26 @@ genTyTAbs ctx n =
                                 (n-1))]
 
 -- Generates all term variables at type
-genTmVars :: Type -> Context -> [Term]
-genTmVars typ ctx = [TmVar i | (TmBind i typ') <- ctx,
+genTmVars :: Type -> NContext -> [Term]
+genTmVars typ ctx = [TmVar i | (TmNBind i typ' sz) <- ctx,
                                 betaEqualTy typ' typ freshTyVars]
 
-extractFTo2 :: Type -> Type -> Context -> [Id] -> Int -> Set.Set Type
+extractFTo2 :: Type -> Type -> NContext -> [Id] -> Int -> Set.Set Type
 extractFTo2 ty t@(TyAbs _ ty2) ctx is n
   | ty == ty2 = Set.singleton t
   | otherwise = extractFTo2 ty ty2 ctx is n
 extractFTo2 ty t@(TyTAbs i ty') ctx is n
   | i `elem` is = Set.empty
   | otherwise = foldr Set.union Set.empty ts
-  where ts' = [subType i fty ty' freshTyVars | (TmBind _ fty) <- ctx]
+  where ts' = [subType i fty ty' freshTyVars | (TmNBind _ fty szty) <- ctx,
+                                                szty < n]
         ts  = [extractFTo2 ty t' ctx (i:is) n | t' <- ts']
 extractFTo2 ty t ctx is n = Set.empty
 
-extractTFTo2 :: Type -> Type -> Context -> Int -> Set.Set (Type, Type)
+extractTFTo2 :: Type -> Type -> NContext -> Int -> Set.Set (Type, Type)
 extractTFTo2 ty1 t@(TyTAbs i ty2) ctx n = Set.fromList ts
-  where ts = [(t,fty)| (TmBind _ fty) <- ctx,
+  where ts = [(t,fty)| (TmNBind _ fty szty) <- ctx,
+                       szty == n,
                        (subType i fty ty2 freshTyVars) == ty1]
 
 extractFTo :: Type -> Type -> Context -> Set.Set Type
@@ -254,22 +249,29 @@ retType (TyVar i) = TyVar i
 retType (TyAbs typ1 typ2) = retType typ2
 retType (TyTAbs i typ) = retType typ
 
-cleanCtx :: Context -> Int -> Set.Set Type
+cleanCtx :: NContext -> Int -> Set.Set Type
 cleanCtx [] n = Set.empty
-cleanCtx ((TyBind _):bs) n = cleanCtx bs n
-cleanCtx ((TmBind f typ):bs) n
-  | sizeType typ < n = Set.insert typ (cleanCtx bs n)
-  | otherwise        = cleanCtx bs n
+cleanCtx ((TyNBind _):bs) n = cleanCtx bs n
+cleanCtx ((TmNBind f typ szty):bs) n
+  | True  = Set.insert typ (cleanCtx bs n)
+  | otherwise = cleanCtx bs n
 
-cleanCtx2 :: Context -> Int -> Set.Set Type
+cleanCtx2 :: NContext -> Int -> Set.Set Type
 cleanCtx2 [] n = Set.empty
-cleanCtx2 ((TyBind _):bs) n = cleanCtx2 bs n
-cleanCtx2 ((TmBind f typ):bs) n
-  | sizeType typ == n = Set.insert typ (cleanCtx2 bs n)
-  | otherwise         = cleanCtx2 bs n
+cleanCtx2 ((TyNBind _):bs) n = cleanCtx2 bs n
+cleanCtx2 ((TmNBind f typ szty):bs) n
+  | True = Set.insert typ (cleanCtx2 bs n)
+  | otherwise = cleanCtx2 bs n
+
+uniqueCtx :: NContext -> Set.Set Type -> NContext
+uniqueCtx [] _ = []
+uniqueCtx ((TyNBind _):bs) s = uniqueCtx bs s
+uniqueCtx (b@(TmNBind _ typ _):bs) s
+  | typ `elem` s = uniqueCtx bs s
+  | otherwise    = b:(uniqueCtx bs (Set.insert typ s))
 
 -- Extracts all function types to a type given a context
-extractFsTo :: Type -> Context -> Int -> [Type]
+extractFsTo :: Type -> NContext -> Int -> [Type]
 extractFsTo typ ctx n =
   let tys = Set.toList $ cleanCtx ctx n
       ftyps = List.foldl'
@@ -278,13 +280,12 @@ extractFsTo typ ctx n =
               [Set.toList $ extractFTo2 typ ty ctx [] n | ty <- tys]
       in ftyps
 
-extractTFsTo :: Type -> Context -> Int -> [(Type,Type)]
+extractTFsTo :: Type -> NContext -> Int -> [(Type,Type)]
 extractTFsTo typ ctx n = Set.toList (foldr Set.union Set.empty
-             [extractTFTo2 typ ftyp ctx n | ftyp@(TyTAbs _ _) <- ctx'])
-  where ctx' = Set.toList $ cleanCtx2 ctx n
+             [extractTFTo2 typ ftyp ctx n | (TmNBind _ ftyp@(TyTAbs _ _) _) <- ctx])
 
 -- Generates all term applications at type to some AST depth n
-genTmApps :: Type -> Context -> Int -> [Term]
+genTmApps :: Type -> NContext -> Int -> [Term]
 genTmApps typ12 ctx n =
   let szs = [(n1, n - 1 - n1) | n1 <- [1..(n-1)]]
       fxs = [(x,y) | sz <- szs,
@@ -294,7 +295,7 @@ genTmApps typ12 ctx n =
       in [TmApp f x | (f,x) <- fxs]
 
 -- Generates all type applications at type to some AST depth n
-genTmTApps :: Type -> Context -> Int -> [Term]
+genTmTApps :: Type -> NContext -> Int -> [Term]
 genTmTApps typ ctx n =
   let cartProd xs ys = [(x,y) | x <- xs, y <- ys]
       szs = [(n1, n - 1 - n1) | n1 <- [1..(n-1)]]
@@ -411,7 +412,7 @@ countType styp typ
 -- genETerms :: Type -> Context -> Int -> [Term]
 -- genETerms = memo3 genETerms'
 
-genETerms :: Type -> Context -> Int -> [Term]
+genETerms :: Type -> NContext -> Int -> [Term]
 genETerms  _ _ 0 = []
 genETerms (TyUnit) ctx 1 = genTmVars TyUnit ctx
 genETerms (TyUnit) ctx n = (genTmApps TyUnit ctx n) ++
@@ -429,12 +430,25 @@ genETerms typ@(TyTAbs _ _) ctx 1 = genTmVars typ ctx
 genETerms typ@(TyTAbs _ _) ctx n = (genTmApps typ ctx n) ++
                                    (genTmTApps typ ctx n)
 
+data NBinding = TmNBind Id Type Int
+              | TyNBind Id
+              deriving (Eq, Show, Ord)
+
+type NContext = [NBinding]
+
+toNBinding :: Binding -> NBinding
+toNBinding (TmBind i ty) = TmNBind i ty (sizeType ty)
+toNBinding (TyBind i) = TyNBind i
+
+toNContext :: Context -> NContext
+toNContext [] = []
+toNContext (b:bs) = (toNBinding b):(toNContext bs)
 
 -- Generates all introduction terms at type to some AST depth n
 -- genITerms :: Type -> Context -> Int -> [Term]
 -- genITerms = memo3 genITerms'
 
-genITerms :: Type -> Context -> Int -> [Term]
+genITerms :: Type -> NContext -> Int -> [Term]
 genITerms _ _ 0 = []
 genITerms (TyUnit) ctx 1 = [TmUnit] ++ (genETerms TyUnit ctx 1)
 genITerms (TyUnit) ctx n = genETerms TyUnit ctx n
@@ -445,11 +459,11 @@ genITerms typ@(TyAbs typ11 typ12) ctx 1 = genETerms typ ctx 1
 genITerms typ@(TyAbs typ11 typ12) ctx n =
   let i = "x" ++ (show n)
       sz = sizeType typ11
-      tms = genITerms typ12 ((TmBind i typ11):ctx) (n-sz-1)
+      tms = genITerms typ12 ((TmNBind i typ11 sz):ctx) (n-sz-1)
       in [TmAbs i typ11 tm | tm <- tms] ++ (genETerms typ ctx n)
 genITerms typ@(TyTAbs _ _) ctx 1 = genETerms typ ctx 1
 genITerms typ@(TyTAbs i typ') ctx n =
-  let tms = genITerms typ' ((TyBind i):ctx) (n-1)
+  let tms = genITerms typ' ((TyNBind i):ctx) (n-1)
       in [TmTAbs i tm | tm <- tms] ++ (genETerms typ ctx n)
 
 -- Generates all elimination types to some AST depth n
@@ -476,7 +490,7 @@ genTypes ctx n = foldr (++) [] [genITypes ctx n' | n' <- [0..n]]
 
 -- Generates all terms to some AST depth n
 genTerms :: Type -> Context -> Int -> [Term]
-genTerms typ ctx n = foldr (++) [] [genITerms typ ctx n' | n' <- [0..n]]
+genTerms typ ctx n = foldr (++) [] [genITerms typ (toNContext ctx) n' | n' <- [0..n]]
 
 
 {-=============================== Examples ===================================-}
@@ -578,7 +592,7 @@ lrnTerms typ exs ctx env [] n =
   let holes = replicate (length exs) (TmVar "$HOLE")
       in lrnTerms typ exs ctx env holes n
 lrnTerms typ exs@((Out _):_) ctx env ltrms n =
-  let ctx' = (extractCtx (extractAbs (ltrms !! 0))) ++ ctx
+  let ctx' = toNContext ((extractCtx (extractAbs (ltrms !! 0))) ++ ctx)
       htrms = genITerms typ ctx' n
       ltrms' = [[badSubTm "$HOLE" htrm ltrm | ltrm <- ltrms] |
                                               htrm <- htrms]
@@ -617,30 +631,3 @@ getTm xxs@(x:xs) = case (head . take 1) xxs of
                      [] -> getTm xs
                      _  -> (head . take 1) x
 
-data Foo = Foo1 Int
-         | Foo2 Int
-         deriving (Show, Generic)
-
-instance HasTrie Foo where
-  newtype (Foo :->: b) = FooTrie {unFooTrie :: Reg Foo :->: b}
-  trie = trieGeneric $! FooTrie
-  untrie = untrieGeneric $! unFooTrie
-  enumerate = enumerateGeneric $! unFooTrie
-
-
-foo :: Foo -> Foo
-foo = memoFix foo'
-
-foo' :: (Foo -> Foo) -> Foo -> Foo
-foo' f (Foo1 0) = Foo1 0
-foo' f (Foo2 0) = Foo2 0
-foo' f (Foo1 1) = Foo1 1
-foo' f (Foo2 1) = Foo2 1
-foo' f (Foo1 n) = f (Foo1 (n-1)) `foop` f (Foo1 (n-2))
-foo' f (Foo2 n) = f (Foo2 (n-1)) `foop` f (Foo2 (n-2))
-
-foop :: Foo -> Foo -> Foo
-foop (Foo1 n1) (Foo1 n2) = Foo1 (n1 + n2)
-foop (Foo1 n1) (Foo2 n2) = Foo1 (n1 + n2)
-foop (Foo2 n1) (Foo1 n2) = Foo2 (n1 + n2)
-foop (Foo2 n1) (Foo2 n2) = Foo2 (n1 + n2)
