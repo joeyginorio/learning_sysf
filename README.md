@@ -1,21 +1,17 @@
-The implementation of learning from types is in the function genTerms in learning.hs. Run the following in ghci:
-```haskell
-genTerms TyBool [] 5
+To run, first compile Test.hs with
+
+```bash
+ghc -rtsopts -O2 Test.hs
 ```
-That generates all terms of type Bool from the empty context, up to an AST size 5.
 
-The implementation of learning from examples is in the function lrnTerms in learning.hs. Run the following in ghci:
-```haskell
-lrnTerms (TyAbs TyBool TyBool) [InTm TmTrue (Out TmTrue)] [] [] 3
+Now you can use Test to run different learning specifications with
+
+```bash
+./Test "fileName" +RTS -sstderr
 ```
-That generates all terms of type Bool->Bool from the empty context, up to an AST size 3 AND which satisfy the example <tt,tt>.
+The RTS and ssterr flags aren't strictly necessary but give useful runtime information, like how long it takes for the program to run and memory usage. I've included examples of learning specifications in the test folder, you would run one with
 
-To generate polymorphic terms, our examples include types. These types are used to instantiate an example at a particular base type. For example, run the following in ghci to learn at type (forall X.X->X) with examples <Bool,tt,tt>:
-```haskell
-lrnTerms (TyTAbs "X" (TyAbs (TyVar "X") (TyVar "X"))) [InTy TyBool (InTm TmTrue (Out TmTrue))] [] [] 4
+```bash
+./Test "test/poly_id.f" +RTS -sstderr
 ```
-This will produce the polymorphic identity function.
-
-The implementation 'works' minus programs which require multiple type applications, or programs where a type application is interleaved with multiple term applications. For example, the encoding of the projections for products require a type application interleaved with multiple term applications.
-
-There's also a bottleneck in performance that becomes apparent when synthesizing programs at around AST depth 20, because of the way the type application rule is currently implemented for learning. This is fixable.
+Currently, the output is printed in System F. So making sure the specification learned the "right" thing requires some care. 
