@@ -161,7 +161,7 @@ Round 2. Imagine we're teaching you a program. But this time we give you an exam
 $$f(x) = x + 1,\;\;\;\;\;\; f(x) = x + 2 - 1,\;\;\;\;\;\; f(x) = x + \cdots$$
 The good news is that $f(x) = x + 1$ is correct. And so are all the other programs, as long as we're agnostic to some details. Types and examples impose useful constraints on learning. It's the data we use when learning in System F \cite{girard1989proofs}.
 
-Existing work can learn successor from similar data \cite{osera2015program, polikarpova2016program}. But suppose $nat$ is a church encoding. For some base type $A$, $nat \coloneqq (A \to A) \to (A \to A)$. Natural numbers are then higher-order functions. They take and return functions. In this context, existing work can no longer learn successor. 
+Existing work can learn successor from similar data \cite{osera2015program, polikarpova2016program}. But suppose $nat$ is a church encoding. For some base type $A$, $nat \coloneqq (A \to A) \to (A \to A)$. Natural numbers are then higher-order functions. They take and return functions. In this setting, existing work can no longer learn successor. 
 
 \subsection{A way forward}
 
@@ -224,9 +224,9 @@ Route 2 is the approach we take. We don't impose restrictions on the types or ex
     \def\extraVskip{4pt}
     \def\labelSpacing{4pt}
     \def\defaultHypSeparation{\hskip .05in}
-        \AxiomC{$\Gamma \vdash \forall\alpha.\tau_1 \rightsquigarrow \bar{e}$}
+        \AxiomC{$\Gamma \vdash \forall\alpha.\tau_1 \rightsquigarrow \hat{e}$}
             \RightLabel{\textsc{(L-TApp)}}
-        \UnaryInfC{$\Gamma \vdash [\tau_2/\alpha]\tau_1 \rightsquigarrow \bar{e}\,\lceil\tau_2\rceil$}
+        \UnaryInfC{$\Gamma \vdash [\tau_2/\alpha]\tau_1 \rightsquigarrow \hat{e}\,\lceil\tau_2\rceil$}
         \DisplayProof
     }
     \\
@@ -235,10 +235,10 @@ Route 2 is the approach we take. We don't impose restrictions on the types or ex
     \def\extraVskip{4pt}
     \def\labelSpacing{4pt}
     \def\defaultHypSeparation{\hskip .05in}
-        \AxiomC{$\Gamma \vdash \tau_1 \to \tau_2 \rightsquigarrow \bar{e}$}
+        \AxiomC{$\Gamma \vdash \tau_1 \to \tau_2 \rightsquigarrow \hat{e}$}
         \AxiomC{$\Gamma \vdash \tau_1 \rightsquigarrow e$}
             \RightLabel{\textsc{(L-App)}}
-        \BinaryInfC{$\Gamma \vdash \tau_2 \rightsquigarrow \bar{e}\:e$}
+        \BinaryInfC{$\Gamma \vdash \tau_2 \rightsquigarrow \hat{e}\:e$}
         \DisplayProof
     } \\
     & \\
@@ -299,14 +299,15 @@ Like typing, we define the relation with a set of inference rules. These rules c
 
 Unlike typing, we only consider programs $e$ in normal form. We discuss later how this pays dividends in the implementation. With reference to the syntax in the appendix, we define System F programs $e$ in normal form:
 \begin{align*}
-e &\coloneqq\; \bar{e} \;\mid\; \lam x\!:\!\tau.e \;\mid\; \Lambda\alpha.e\\
-\bar{e} &\coloneqq\; x \;\mid\; \bar{e}\;e \;\mid\; \bar{e}\,\lceil\tau\rceil
+e &\coloneqq\; \hat{e} \;\mid\; \lam x\!:\!\tau.e \;\mid\; \Lambda\alpha.e\\
+\hat{e} &\coloneqq\; x \;\mid\; \hat{e}\;e \;\mid\; \hat{e}\,\lceil\tau\rceil
 \end{align*}
 
 \subsection{Learning, a relation}
-If you squint, you may think that learning in Figure \ref{fig:learning} looks a lot like typing in Figure \ref{fig:typing}. The semblance isn't superficial, but instead reflects an equivalence between learning and typing which we later show. Despite this, the learning relation isn't redundant. It forms the core of an extended learning relation in the next section, where we learn from both types and examples. 
+If you squint, you may think that learning in Figure \ref{fig:learning} looks a lot like typing in Figure \ref{fig:typing}. The semblance isn't superficial, but instead reflects an equivalence between learning and typing which we later state. Despite this, the learning relation isn't redundant. It forms the core of an extended learning relation in the next section, where we learn from both types and examples. 
 
 \textsc{(L-Var)} says if $x$ is bound to type $\tau$ in the context $\Gamma$, then you can learn the program $x$ of type $\tau$. 
+\vspace{.1cm}
 \begin{prooftree}
 \def\extraVskip{4pt}
 \def\labelSpacing{4pt}
@@ -314,8 +315,10 @@ If you squint, you may think that learning in Figure \ref{fig:learning} looks a 
 	\RightLabel{\textsc{(L-Var)}}
 	\UnaryInfC{$x{:}\tau \vdash \tau \rightsquigarrow x$}
 \end{prooftree}
+\vspace{.2cm}
 
-\textsc{(L-Abs)} says if $x$ is bound to type $\tau_1$ in the context $\Gamma$ and you can learn a program $e_2$ from type $\tau_2$, then you can learn the program $\lam x{:}\tau_1.e_2$ from type $\tau_1 \!\to\! \tau_2$ and $x$ is removed from the context.
+\textsc{(L-Abs)} says if $x$ is bound to type $\tau_1$ in the context and you can learn a program $e_2$ from type $\tau_2$, then you can learn the program $\lam x{:}\tau_1.e_2$ from type $\tau_1 \!\to\! \tau_2$ and $x$ is removed from the context.
+\vspace{.1cm}
 \begin{prooftree}
 \def\extraVskip{4pt}
 \def\labelSpacing{4pt}
@@ -323,18 +326,22 @@ If you squint, you may think that learning in Figure \ref{fig:learning} looks a 
 	\RightLabel{\textsc{(L-Abs)}}
 	\UnaryInfC{$\Gamma \vdash \tau_1 \!\to\! \tau_2 \!\to \!\tau_2 \rightsquigarrow \lam x{:}\tau_1.\lam y{:}\tau_2.y$}
 \end{prooftree}
+\vspace{.2cm}
 
-\textsc{(L-App)} says that if you can learn a program $\bar{e}$ from type $\tau_1 \!\to\! \tau_2$ and a program $e$ from type $\tau_1$, then you can learn $\bar{e}\:e$ from type $\tau_2$.
+\textsc{(L-App)} says that if you can learn a program $\hat{e}$ from type $\tau_1 \!\to\! \tau_2$ and a program $e$ from type $\tau_1$, then you can learn $\hat{e}\:e$ from type $\tau_2$.
+\vspace{.1cm}
 \begin{prooftree}
 \def\extraVskip{4pt}
 \def\labelSpacing{4pt}
-	\AxiomC{$\Gamma \vdash \tau \!\to\! \tau \rightsquigarrow \lam x{:}\tau.x$}
-	\AxiomC{$\Gamma \vdash \tau \rightsquigarrow y$}
+	\AxiomC{$\Gamma \vdash \tau \!\to\! \tau \rightsquigarrow f$}
+	\AxiomC{$\Gamma \vdash \tau \rightsquigarrow x$}
 	\RightLabel{\textsc{(L-App)}}
-	\BinaryInfC{$\Gamma \vdash \tau \rightsquigarrow (\lam x{:}\tau.x)y $}
+	\BinaryInfC{$\Gamma \vdash \tau \rightsquigarrow f\;x $}
 \end{prooftree}
+\vspace{.2cm}
 
 \textsc{(L-TAbs)} says that if $\alpha$ is in the context, and you can learn a program $e$ from type $\tau$, then you can learn a program $\Lambda\alpha.e$ from type $\forall\alpha.\tau$ and $\alpha$ is removed from the context.
+\vspace{.1cm}
 \begin{prooftree}
 \def\extraVskip{4pt}
 \def\labelSpacing{4pt}
@@ -342,24 +349,138 @@ If you squint, you may think that learning in Figure \ref{fig:learning} looks a 
 	\RightLabel{\textsc{(L-TAbs)}}
 	\UnaryInfC{$\Gamma \vdash \forall\alpha.\alpha \!\to\! \alpha \rightsquigarrow \Lambda\alpha.\lam x{:}\alpha.x$}
 \end{prooftree}
+\vspace{.2cm}
 
-\textsc{(T-TApp)} says that if you can learn a program $\bar{e}$ from type $\forall\alpha.\tau_1$, then you can learn the program $\bar{e}\,\lceil\tau_2\rceil$ from type $[\tau_2/\alpha]\tau_1$.
+\textsc{(T-TApp)} says that if you can learn a program $\hat{e}$ from type $\forall\alpha.\tau_1$, then you can learn the program $\hat{e}\,\lceil\tau_2\rceil$ from type $[\tau_2/\alpha]\tau_1$.
+\vspace{.1cm}
 \begin{prooftree}
 \def\extraVskip{4pt}
 \def\labelSpacing{4pt}
-	\AxiomC{$\Gamma \vdash \forall\alpha.\alpha\!\to\!\alpha \rightsquigarrow \Lambda\alpha.\lam x{:}\alpha.x$}
+	\AxiomC{$\Gamma \vdash \forall\alpha.\alpha\!\to\!\alpha \rightsquigarrow f$}
 	\RightLabel{\textsc{(T-TApp)}}
-	\UnaryInfC{$\Gamma \vdash \tau\!\to\!\tau \rightsquigarrow (\Lambda\alpha.\lam x{:}\alpha.x)\lceil nat\rceil$}
+	\UnaryInfC{$\Gamma \vdash \tau\!\to\!\tau \rightsquigarrow f\lceil \tau\rceil$}
 \end{prooftree}
+\vspace{.2cm}
 
 \subsection{Metatheory}
+Learning is a relation. Hence we can discuss its metatheory. We care most about two properties: soundness and completeness. Soundness ensures we learn correct programs. Completeness ensures we learn all programs. 
+
+We state the relevant theorems in this section but defer proofs to the appendix. Most of the heavy lifting is done by standard proofs of type systems, like progress and preservation. Learning exploits these properties of type systems to provide similar guarantees.
 
 
-\newpage
+\begin{lemma}[\textsc{Soundness of Learning}]
+If $\,\Gamma \vdash \tau \rightsquigarrow e$ then $\Gamma \vdash e : \tau$
+\label{soundness-learning}
+\end{lemma}
+
+\begin{lemma}[\textsc{Completeness of Learning}]
+If $\,\Gamma \vdash e : \tau$ then $\,\Gamma \vdash \tau \rightsquigarrow e$
+\label{completeness-learning}
+\end{lemma}
+
+Structural induction on the learning and typing rules proves these two lemmas. And together, they directly prove the equivalence of typing and learning.
+
+\begin{theorem}[\textsc{Equivalence of Typing and Learning}]
+If and only if $\,\Gamma \vdash \tau \rightsquigarrow e$ then $\Gamma \vdash e : \tau$
+\label{equivalence-learning}
+\end{theorem}
+
+Because of the equivalence, we can extend strong metatheoretic guarantees to learning from examples. 
+
 \section{Learning from Examples}
 % present the augmented relation
 % state completeness/soundness result
+To learn from examples, we extend our learning relation to include examples $[\chi]$.
+$$\Gamma \vdash \tau \rhd [\chi] \rightsquigarrow e$$
+The relation asserts that given a context $\Gamma$, a type $\tau$, and examples $[\chi]$, you can learn program $e$.
 
+Examples are lists of tuples with the inputs and output to a program. For example, $[\langle 1,1\rangle]$ describes a program whose input is $1$ and output is $1$. If we want more than one example, we can add to the list: $[\langle 1, 1\rangle, \langle 2,2 \rangle]$. And with System F, types are also valid inputs. So $[\langle Nat,1,1\rangle, \langle Nat,2,2\rangle]$ describes a polymorphic program instantiated at type $Nat$ whose input is $1$ and output is $1$. In general, an example takes the form
+$$ \chi \coloneqq \langle e, \chi\rangle \mid \langle \tau, \chi\rangle \mid \langle e,Nil\rangle$$
+
+Importantly, the syntax doesn't restrict what can be an input or output. Any program $e$ or type $\tau$ can be an input. Likewise, any program $e$ can be an output. We can describe any input-output relationship in the language. Note that we use the following short-hand notation for examples: $\langle\tau,\langle e_1, \langle e_2, Nil\rangle\rangle\rangle \equiv \langle \tau, e_1, e_2\rangle$.
+
+\subsection{Learning, a relation}
+
+Unlike the previous learning relation, Figure \ref{fig:learning-examples} looks a bit foreign. Nevertheless, the intuition is simple. We demonstrate with learning identity from examples. Without loss of generality, assume $Nat$ as a base type, and natural numbers.
+$$\cdot \vdash Nat \!\to\! Nat \rhd [\langle 1,1\rangle,\langle 2,2 \rangle] \rightsquigarrow \blacksquare$$
+
+Examples describe possible worlds, one where our program's input is $1$ and the other where our program's input is $2$. Throughout learning we need a way to keep track of these distinct worlds. So our first step is always to duplicate $\blacksquare$, so that we have one per example. 
+$$\cdot \vdash list \,Nat \!\to\! Nat \rhd [\langle1,1\rangle,\langle2,2\rangle] \rightsquigarrow [\blacksquare, \blacksquare]$$
+
+Now we can constrain each world, by applying them to their respective inputs. Because an example is a tuple, we extract components using the left and right projections $\pi_1$ and $\pi_2$.
+$$\cdot \vdash list \,Nat \rhd [\langle1\rangle,\langle2\rangle] \rightsquigarrow [(\blacksquare)1, (\blacksquare)2]$$
+
+Since $\blacksquare$ is applied to an argument, we know it must be an abstraction. Hence we can rewrite each $\blacksquare$.
+$$\cdot \vdash list \,Nat \rhd [\langle1\rangle,\langle2\rangle] \rightsquigarrow [(\lam x{:}Nat.\blacksquare)1, (\lam x{:}Nat.\blacksquare)2]$$
+
+Now that we're out of inputs, the problem becomes how to generate a program for $\blacksquare$ such that each world satisfies their respective outputs. 
+$$\cdot \vdash Nat \rightsquigarrow (\lam x{:}Nat.\blacksquare)1$$
+$$(\lam x{:}Nat.\blacksquare)1 =_\beta 1\;\land\;(\lam x{:}Nat.\blacksquare)2=_\beta2$$
+
+\begin{figure*}[t]
+\vspace{.3cm}
+\centering
+\setlength{\tabcolsep}{12pt}
+\begin{tabular}{l r}
+\specialrule{.1em}{0em}{.2em}
+\specialrule{.1em}{0em}{1em}
+    \Large \textsc{Learning} & 
+    \framebox{$\Gamma \vdash \tau \rhd [\chi] \rightsquigarrow e$}\\
+    & \\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSp]acing{4pt}
+    \def\defaultHypSeparation{\hskip .2in}
+        \AxiomC{$\Gamma \vdash \tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow [\texttt{let}\:(\cdot)\:\texttt{in}\:e_1,\dots,\texttt{let}\:(\cdot)\:\texttt{in}\:e_n]$}
+        \AxiomC{$\bigwedge_{i=1}^n e_i =_\beta e_n$}
+        \RightLabel{\textsc{(L-Wrld)}}
+        \BinaryInfC{$\Gamma \vdash \tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow e$}
+        
+
+        \DisplayProof
+    } \\\\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .2in}
+        \AxiomC{$\Gamma \vdash \tau \rightsquigarrow e$}
+        \AxiomC{$\bigwedge_{i=1}^{n} (\Gamma \vdash \texttt{let}\:(b_i)\:\texttt{in}\: e : \tau)\;\;\;\;\;\;\;\bigwedge_{i=1}^{n} (\texttt{let}\:(b_i)\:\texttt{in}\: e =_\beta \chi_i) $}
+            \RightLabel{\textsc{(L-Base)}}
+        \BinaryInfC{$\Gamma \vdash \tau \rhd [\langle\chi_1\rangle,\dots,\langle\chi_n\rangle] \rightsquigarrow [\texttt{let}\:(b_1)\:\texttt{in}\: e,\dots,\texttt{let}\:(b_n)\:\texttt{in}\: e]$}
+        
+
+        \DisplayProof
+    } \\\\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .1in}
+        \AxiomC{$\Gamma, x{:}\tau_a \vdash \tau_b \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow [\texttt{let}\:(b_1,x{:}\tau_a=e_1)\:\texttt{in}\: e_1,\dots,\texttt{let}\:(b_n,x{:}\tau_a=e_n)\:\texttt{in}\: e_n]$}
+        \RightLabel{\textsc{(L-EAbs)}}
+        \UnaryInfC{$\Gamma \vdash\tau_{a} \!\to\! \tau_b \rhd [\langle e_1,\chi_1\rangle,\dots,\langle e_n,\chi_n\rangle] \rightsquigarrow [\texttt{let}\:(b_1)\:\texttt{in}\: \lambda x{:}\tau_a.e_1,\dots,\texttt{let}\:(b_n)\:\texttt{in}\: \lambda x{:}\tau_a.e_n]$}
+        \DisplayProof
+    } \\\\
+    \multicolumn{2}{c}{
+    \def\extraVskip{4pt}
+    \def\labelSpacing{4pt}
+    \def\defaultHypSeparation{\hskip .1in}
+		\AxiomC{$\Gamma, \alpha \vdash \tau_a \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow [\texttt{let}\:(b_1,\alpha=\tau_b)\:\texttt{in}\: e_1,\dots,\texttt{let}\:(b_n,\alpha=\tau_b)\:\texttt{in}\: e_n]$}        
+        \RightLabel{\textsc{(L-ETAbs)}}
+        \UnaryInfC{$\Gamma \vdash \forall\alpha.\tau_a \rhd [\langle\tau_b,\chi_1\rangle,\dots,\langle\tau_b,\chi_n\rangle] \rightsquigarrow [\texttt{let}\:(b_1)\:\texttt{in}\: \Lambda\alpha.e_1,\dots,\texttt{let}\:(b_n)\:\texttt{in}\: \Lambda\alpha.e_n]$}
+        \DisplayProof
+    } \\
+    & \\
+\specialrule{.1em}{1em}{0em}
+\end{tabular}
+\caption{Learning from examples in System F}
+    \label{fig:learning-examples}
+\end{figure*}
+
+
+
+
+
+\newpage
 \section{Implementation}
 
 
@@ -421,8 +542,7 @@ If you squint, you may think that learning in Figure \ref{fig:learning} looks a 
     \begin{math}
     \setlength{\jot}{-2pt}
     \begin{aligned}
-    e ::= \;& && \hspace*{.25in} \textsc{
-    :}\\
+    e ::= \;& && \hspace*{.25in} \textsc{terms:}\\
         & x && \hspace*{.25in} \textit{variable}\\
         & e_1e_2 && \hspace*{.25in} \textit{application}\\
         & \lam x {:} \tau.e && \hspace*{.25in} \textit{abstraction}\\
