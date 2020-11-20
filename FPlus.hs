@@ -660,9 +660,6 @@ desugarCase (TmTApp (TmTAbs "#R" (TmConstr c tms tyc)) rty) tmtms =
 desugarCase (TmTApp tm@(TmVar i) rty) tmtms =
   let cctms = desugarCCases tmtms
       in foldl TmApp (TmTApp tm (desugarTy rty)) cctms
-desugarCase x tmtms =
-  let cctms = desugarCCases tmtms
-      in foldl TmApp x cctms
 
 desugarCCases :: [(Term, Term)] -> [Term]
 desugarCCases tmtms = map desugarCCase tmtms
