@@ -365,8 +365,7 @@ If you squint, you may think that learning in Figure \ref{fig:learning} looks a 
 \subsection{Metatheory}
 Learning is a relation. Hence we can discuss its metatheory. We care most about two properties: soundness and completeness. Soundness ensures we learn correct programs. Completeness ensures we learn all programs. 
 
-We state the relevant theorems in this section but defer proofs to the appendix. Most of the heavy lifting is done by standard proofs of type systems, like progress and preservation. Learning exploits these properties of type systems to provide similar guarantees.
-
+We state the relevant theorems in this section. Most of the heavy lifting for proving these properties is done by standard proofs of type systems, like progress and preservation. Learning exploits these properties of type systems to provide similar guarantees.
 
 \begin{lemma}[\textsc{Soundness of Learning}]
 If $\,\Gamma \vdash \tau \rightsquigarrow e$ then $\Gamma \vdash e : \tau$
@@ -385,7 +384,7 @@ If and only if $\,\Gamma \vdash \tau \rightsquigarrow e$ then $\Gamma \vdash e :
 \label{equivalence-learning}
 \end{theorem}
 
-Because of the equivalence, we can extend strong metatheoretic guarantees to learning from examples. 
+Because of the equivalence we can extend strong metatheoretic guarantees to learning from examples, for which learning from types is a key step.
 
 \section{Learning from Examples}
 % present the augmented relation
@@ -401,21 +400,29 @@ Importantly, the syntax doesn't restrict what can be an input or output. Any pro
 
 \subsection{Learning, a relation}
 
-Unlike the previous learning relation, Figure \ref{fig:learning-examples} looks a bit foreign. Nevertheless, the intuition is simple. We demonstrate with learning identity from examples. Without loss of generality, assume $Nat$ as a base type, and natural numbers.
-$$\cdot \vdash Nat \!\to\! Nat \rhd [\langle 1,1\rangle,\langle 2,2 \rangle] \rightsquigarrow \blacksquare$$
+Unlike the previous learning relation, Figure \ref{fig:learning-examples} looks a bit foreign. Nevertheless, the intuition is simple. We demonstrate with learning polymorphic identity from examples. Without loss of generality, assume a base type $Nat$ and natural numbers.
+$$\cdot \vdash \forall\alpha.\alpha \!\to\! \alpha \rhd [\langle Nat,1,1\rangle] \rightsquigarrow \blacksquare$$
 
-Examples describe possible worlds, one where our program's input is $1$ and the other where our program's input is $2$. Throughout learning we need a way to keep track of these distinct worlds. So our first step is always to duplicate $\blacksquare$, so that we have one per example. 
-$$\cdot \vdash list \,Nat \!\to\! Nat \rhd [\langle1,1\rangle,\langle2,2\rangle] \rightsquigarrow [\blacksquare, \blacksquare]$$
+Examples describe possible worlds. $\langle Nat,1,1\rangle$ is a world where $\blacksquare$'s input is $Nat$ and $1$, with an output of $1$. Throughout learning we need a way to keep track of these distinct worlds. So our first step is always to duplicate $\blacksquare$, so that we have one per example. We also introduce empty let bindings to record constraints on variables at later steps. \textsc{(L-Wrld)} in Figure \ref{fig:learning-examples} formalizes this step.
+$$\cdot \vdash \alpha.\alpha \!\to\! \alpha \rhd [\langle Nat,1,1\rangle] \rightsquigarrow [\texttt{let}\:(\cdot)\:in\:\blacksquare]$$
 
-Now we can constrain each world, by applying them to their respective inputs. Because an example is a tuple, we extract components using the left and right projections $\pi_1$ and $\pi_2$.
-$$\cdot \vdash list \,Nat \rhd [\langle1\rangle,\langle2\rangle] \rightsquigarrow [(\blacksquare)1, (\blacksquare)2]$$
+Now, our target type is $\alpha.\alpha\!\to\! \alpha$. So we know $\blacksquare$ can bind a variable $\alpha$ to some type. And since we have inputs in $[\langle Nat,1,1\rangle]$, we know what that type is. \textsc{(L-ETAbs)}  in Figure \ref{fig:learning-examples} formalizes this step.
+$$\alpha \vdash \alpha\!\to\!\alpha \rhd [\langle1,1\rangle] \rightsquigarrow [\texttt{let}\:(\alpha=Nat)\:in\:\blacksquare]$$
 
-Since $\blacksquare$ is applied to an argument, we know it must be an abstraction. Hence we can rewrite each $\blacksquare$.
-$$\cdot \vdash list \,Nat \rhd [\langle1\rangle,\langle2\rangle] \rightsquigarrow [(\lam x{:}Nat.\blacksquare)1, (\lam x{:}Nat.\blacksquare)2]$$
+Our target type is now $\alpha\!\to\! \alpha$. So we know $\blacksquare$ can bind a variable $x{:}\alpha$ to some program. And since we have inputs in $[\langle 1,1\rangle]$, we know what that program is. \textsc{(L-EAbs)} in Figure \ref{fig:learning-examples} formalizes this step. 
+$$\alpha,x{:}\alpha \vdash \alpha \rhd [\langle1\rangle] \rightsquigarrow [\texttt{let}\:(\alpha=Nat,x{:}\alpha=1)\:in\:\blacksquare]$$
 
-Now that we're out of inputs, the problem becomes how to generate a program for $\blacksquare$ such that each world satisfies their respective outputs. 
-$$\cdot \vdash Nat \rightsquigarrow (\lam x{:}Nat.\blacksquare)1$$
-$$(\lam x{:}Nat.\blacksquare)1 =_\beta 1\;\land\;(\lam x{:}Nat.\blacksquare)2=_\beta2$$
+There aren't any inputs left to add bindings to our possible worlds. Therefore, we invoke the relation for learning from types (Figure \ref{fig:learning}) to generate a candidate for $\blacksquare$. Then we check that this candidate evaluates to the correct output in each possible world.
+$$\alpha,x{:}\alpha \vdash \alpha \rightsquigarrow x \;\;\;\;\;\texttt{let}\:(\alpha=Nat, x{:}\alpha=1)\:in\:x =_\beta 1$$
+
+With our examples satisfied, we can trivially extract the program $\Lambda\alpha.\lambda x{:}\alpha.x$ from the nested \texttt{let} expression. Note that these expressions are merely a syntactic sugaring of System F programs.
+\begin{align*}
+\texttt{let}\:(\cdot)\:in\:t &\equiv t\\
+\texttt{let}\:(x{:}\tau=s)\:in\:t &\equiv (\lambda x{:}\tau.t)s\\
+\texttt{let}\:(\alpha=\tau)\:in\:t &\equiv (\Lambda \alpha.t)\lceil\tau\rceil\\
+\texttt{let}\:(x{:}\tau=t_1,bs)\:in\:t_2 &\equiv \texttt{let}\:(x{:}\tau=t_1)\:in\:\texttt{let}\:(bs)\:in\:t_2\\
+\text{where } b &\coloneqq \;\cdot\; \mid \;x{:}\tau=e, b \;\mid \;\alpha=\tau, b  
+\end{align*}
 
 \begin{figure*}[t]
 \vspace{.3cm}
@@ -476,9 +483,22 @@ $$(\lam x{:}Nat.\blacksquare)1 =_\beta 1\;\land\;(\lam x{:}Nat.\blacksquare)2=_\
     \label{fig:learning-examples}
 \end{figure*}
 
+\subsection{Metatheory}
+As before, we care most about two properties: soundness and completeness. Soundness ensures we learn correct programs from examples. Completeness ensures we learn all programs from examples.
 
+We state the relevant theorems in this section. This time, there is no equivalence to typing. As a result, the proofs are more distinct. We omit the proofs here, but they are not controversial. Completeness and soundness proofs for similar relations exist in \cite{osera2015program}.
 
+\begin{lemma}[\textsc{Soundness of Learning}]
+If $\,\Gamma \vdash \tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow e$ then $\Gamma \vdash e : \tau$
+\label{soundness-learning-examples}
+\end{lemma}
 
+\begin{lemma}[\textsc{Completeness of Learning}]
+If $\,\Gamma \vdash e : \tau$ and there exist some $[\chi_1,\dots,\chi_n]$ which satisfies $e$, then $\,\Gamma \vdash \tau \rhd [\chi_1,\dots,\chi_n] \rightsquigarrow e$.
+\label{completeness-learning-examples-b}
+\end{lemma}
+
+Learning from examples maintains strong metatheoretic properties. As a result, it forms the basis for a powerful approach towards learning programs from examples. However, the relation is highly non-deterministic, and does not directly translate to an algorithm. Nevertheless, it does provide a blueprint for what that algorithm looks like---as we saw when learning polymorphic identity. In the next sections we explore the strength of this approach by implementing learning in System F.
 
 \newpage
 \section{Implementation}
